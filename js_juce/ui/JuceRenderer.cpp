@@ -85,6 +85,8 @@ static juce::File resolveFontFile(const juce::String& path)
 
 static juce::Font applyFontProps(const ElementNode& node, juce::Font font)
 {
+    bool appliedTypefaceFromFile = false;
+
     if (const auto fontFile = readOptionalTextProp(node, "fontFile"))
     {
         DBG("[js_juce][font] applying fontFile: " + *fontFile);
@@ -128,7 +130,10 @@ static juce::Font applyFontProps(const ElementNode& node, juce::Font font)
         if (it != loadedTypefaces.end() && it->second != nullptr)
         {
             const auto previousHeight = font.getHeight();
-            font = juce::Font(it->second);
+            juce::FontOptions options(it->second);
+            options = options.withHeight(previousHeight);
+            font = juce::Font(options);
+            appliedTypefaceFromFile = true;
             font.setHeight(previousHeight);
             DBG("[js_juce][font] applied typeface from file: " + it->second->getName());
         }
@@ -140,15 +145,22 @@ static juce::Font applyFontProps(const ElementNode& node, juce::Font font)
 
     if (const auto family = readOptionalTextProp(node, "fontFamily"))
     {
-        const auto currentName = font.getTypefaceName();
-        if (currentName != *family)
+        if (!appliedTypefaceFromFile)
         {
-            font.setTypefaceName(*family);
-            DBG("[js_juce][font] applied fontFamily: " + *family);
+            const auto currentName = font.getTypefaceName();
+            if (currentName != *family)
+            {
+                font.setTypefaceName(*family);
+                DBG("[js_juce][font] applied fontFamily: " + *family);
+            }
+            else
+            {
+                DBG("[js_juce][font] skipped fontFamily override (already applied): " + *family);
+            }
         }
         else
         {
-            DBG("[js_juce][font] skipped fontFamily override (already applied): " + *family);
+            DBG("[js_juce][font] skipped fontFamily because fontFile typeface is active: " + *family);
         }
     }
 
