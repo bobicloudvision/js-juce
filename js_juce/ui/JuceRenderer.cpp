@@ -75,6 +75,24 @@ static juce::File resolveFontFile(const juce::String& path)
         return exeParentCandidate;
     }
 
+    // Finder-launched app bundles often have a cwd unrelated to the project.
+    // Walk up from the executable directory and try the relative font path at each level.
+    auto cursor = exeDir;
+    for (int i = 0; i < 16; ++i)
+    {
+        const auto candidate = cursor.getChildFile(path);
+        if (candidate.existsAsFile())
+        {
+            DBG("[js_juce][font] resolved by upward search: " + candidate.getFullPathName());
+            return candidate;
+        }
+
+        const auto parent = cursor.getParentDirectory();
+        if (parent == cursor)
+            break;
+        cursor = parent;
+    }
+
     DBG("[js_juce][font] resolve failed for: " + path);
     DBG("[js_juce][font] checked cwd candidate: " + cwdCandidate.getFullPathName());
     DBG("[js_juce][font] checked exe candidate: " + exeCandidate.getFullPathName());
