@@ -1,17 +1,124 @@
 #include "JuceRenderer.h"
+#include <algorithm>
 #include <map>
 #include <optional>
+#include <vector>
 
 namespace js_juce
 {
 namespace
 {
+struct CssLength
+{
+    enum class Kind
+    {
+        Auto,
+        Px,
+        Percent
+    };
+
+    Kind kind = Kind::Auto;
+    float value = 0.0f;
+};
+
+static CssLength parseCssLength(const juce::var& value)
+{
+    CssLength out;
+    if (value.isVoid() || value.isUndefined())
+        return out;
+
+    if (value.isString())
+    {
+        auto text = value.toString().trim();
+        if (text.isEmpty() || text == "auto")
+            return out;
+
+        if (text.endsWithChar('%'))
+        {
+            out.kind = CssLength::Kind::Percent;
+            out.value = static_cast<float>(text.dropLastCharacters(1).getDoubleValue()) / 100.0f;
+            return out;
+        }
+
+        auto lower = text.toLowerCase();
+        if (lower.endsWith("px"))
+            lower = lower.dropLastCharacters(2).trim();
+
+        out.kind = CssLength::Kind::Px;
+        out.value = static_cast<float>(lower.getDoubleValue());
+        return out;
+    }
+
+    if (value.isDouble() || value.isInt() || value.isInt64() || value.isBool())
+    {
+        out.kind = CssLength::Kind::Px;
+        out.value = static_cast<float>(static_cast<double>(value));
+        return out;
+    }
+
+    return out;
+}
+
+static float resolveCssLengthPx(const CssLength& spec, float referencePx)
+{
+    if (spec.kind == CssLength::Kind::Auto)
+        return -1.0f;
+
+    if (spec.kind == CssLength::Kind::Percent)
+        return referencePx * spec.value;
+
+    return spec.value;
+}
+
+static juce::Colour pickBorderPaintColour(std::optional<juce::Colour> edge, const juce::Colour& fallback)
+{
+    return edge.value_or(fallback);
+}
+
+static float readHorizontalExtras(const juce::BorderSize<int>& padding, const juce::BorderSize<int>& border)
+{
+    return static_cast<float>(padding.getLeft() + padding.getRight() + border.getLeft() + border.getRight());
+}
+
+static float readVerticalExtras(const juce::BorderSize<int>& padding, const juce::BorderSize<int>& border)
+{
+    return static_cast<float>(padding.getTop() + padding.getBottom() + border.getTop() + border.getBottom());
+}
+
+static float cssWidthToOuterPx(const CssLength& widthSpec,
+                               float referencePx,
+                               const juce::BorderSize<int>& padding,
+                               const juce::BorderSize<int>& border,
+                               bool borderBox)
+{
+    const auto resolved = resolveCssLengthPx(widthSpec, referencePx);
+    if (resolved < 0.0f)
+        return -1.0f;
+
+    const auto extras = readHorizontalExtras(padding, border);
+    return borderBox ? resolved : resolved + extras;
+}
+
+static float cssHeightToOuterPx(const CssLength& heightSpec,
+                                float referencePx,
+                                const juce::BorderSize<int>& padding,
+                                const juce::BorderSize<int>& border,
+                                bool borderBox)
+{
+    const auto resolved = resolveCssLengthPx(heightSpec, referencePx);
+    if (resolved < 0.0f)
+        return -1.0f;
+
+    const auto extras = readVerticalExtras(padding, border);
+    return borderBox ? resolved : resolved + extras;
+}
+
 struct ChildLayoutStyle
 {
-    float width = -1.0f;
+    CssLength widthSpec;
+    CssLength heightSpec;
     float minWidth = 0.0f;
     float maxWidth = -1.0f;
-    float height = -1.0f;
     float minHeight = 0.0f;
     float maxHeight = -1.0f;
     float flexGrow = 1.0f;
@@ -20,6 +127,16 @@ struct ChildLayoutStyle
     int order = 0;
     juce::FlexItem::AlignSelf alignSelf = juce::FlexItem::AlignSelf::autoAlign;
     juce::FlexItem::Margin margin;
+    juce::String display = "block";
+    juce::BorderSize<int> padding;
+    juce::BorderSize<int> border;
+    bool boxSizingBorderBox = false;
+    juce::String position = "static";
+    CssLength topSpec;
+    CssLength rightSpec;
+    CssLength bottomSpec;
+    CssLength leftSpec;
+    int zIndex = 0;
 };
 
 static std::optional<juce::String> readOptionalTextProp(const ElementNode& node, const juce::String& name)
@@ -161,24 +278,48 @@ static juce::Font applyFontProps(const ElementNode& node, juce::Font font)
         }
     }
 
-    if (const auto family = readOptionalTextProp(node, "fontFamily"))
+    if (!appliedTypefaceFromFile)
     {
-        if (!appliedTypefaceFromFile)
+        juce::String chosenFamily;
+
+        if (const auto* famVar = node.props.getVarPointer("fontFamilies"))
         {
-            const auto currentName = font.getTypefaceName();
-            if (currentName != *family)
+            if (const auto* arr = famVar->getArray())
             {
-                font.setTypefaceName(*family);
-                DBG("[js_juce][font] applied fontFamily: " + *family);
-            }
-            else
-            {
-                DBG("[js_juce][font] skipped fontFamily override (already applied): " + *family);
+                for (const auto& item : *arr)
+                {
+                    const auto piece = item.toString().trim();
+                    if (piece.isNotEmpty())
+                    {
+                        chosenFamily = piece;
+                        break;
+                    }
+                }
             }
         }
-        else
+
+        if (chosenFamily.isEmpty())
         {
-            DBG("[js_juce][font] skipped fontFamily because fontFile typeface is active: " + *family);
+            if (const auto family = readOptionalTextProp(node, "fontFamily"))
+            {
+                juce::StringArray tokens;
+                tokens.addTokens(*family, ",", "\"'");
+                for (const auto& token : tokens)
+                {
+                    const auto trimmed = token.trim();
+                    if (trimmed.isNotEmpty())
+                    {
+                        chosenFamily = trimmed;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (chosenFamily.isNotEmpty() && font.getTypefaceName() != chosenFamily)
+        {
+            font.setTypefaceName(chosenFamily);
+            DBG("[js_juce][font] applied fontFamily: " + chosenFamily);
         }
     }
 
@@ -188,17 +329,54 @@ static juce::Font applyFontProps(const ElementNode& node, juce::Font font)
         DBG("[js_juce][font] applied fontSize: " + juce::String(*size));
     }
 
-    if (const auto weight = readOptionalTextProp(node, "fontWeight"))
+    if (const auto style = readOptionalTextProp(node, "fontStyle"))
     {
-        const auto normalized = weight->toLowerCase();
-        const bool isBold = normalized == "bold"
-                            || normalized == "600"
-                            || normalized == "700"
-                            || normalized == "800"
-                            || normalized == "900";
-        font.setBold(isBold);
-        DBG("[js_juce][font] applied fontWeight: " + *weight + " (bold=" + juce::String(isBold ? "true" : "false") + ")");
+        const auto normalized = style->toLowerCase();
+        if (normalized == "italic" || normalized == "oblique")
+            font.setItalic(true);
+        else if (normalized == "normal")
+            font.setItalic(false);
     }
+
+    if (const auto weightText = readOptionalTextProp(node, "fontWeight"))
+    {
+        const auto normalized = weightText->trim().toLowerCase();
+        if (normalized.containsOnly("0123456789"))
+        {
+            const int numeric = normalized.getIntValue();
+            if (numeric >= 100 && numeric <= 900)
+                font.setBold(numeric >= 600);
+        }
+        else
+        {
+            const bool isBold = normalized == "bold"
+                                || normalized == "bolder"
+                                || normalized == "600"
+                                || normalized == "700"
+                                || normalized == "800"
+                                || normalized == "900";
+            font.setBold(isBold);
+        }
+        DBG("[js_juce][font] applied fontWeight: " + *weightText);
+    }
+    else if (const auto weightNumber = readOptionalNumberProp(node, "fontWeight"))
+    {
+        const int numeric = static_cast<int>(*weightNumber);
+        if (numeric >= 100 && numeric <= 900)
+            font.setBold(numeric >= 600);
+    }
+
+    if (const auto lh = readOptionalNumberProp(node, "lineHeight"))
+    {
+        const auto current = font.getHeight();
+        if (*lh >= 4.0f)
+            font.setHeight(*lh);
+        else if (*lh > 0.0f)
+            font.setHeight(current * *lh);
+    }
+
+    if (const auto ls = readOptionalNumberProp(node, "letterSpacing"))
+        font = font.withExtraKerningFactor(*ls * 0.02f);
 
     return font;
 }
@@ -290,14 +468,48 @@ static float readEdgeValue(const ElementNode& node, const juce::String& allName,
     return edgeValue.value_or(allValue.value_or(fallbackValue));
 }
 
+static juce::BorderSize<int> readPaddingInsets(const ElementNode& node)
+{
+    const auto all = readOptionalNumberProp(node, "padding").value_or(0.0f);
+    const auto top = readEdgeValue(node, "padding", "paddingTop", all);
+    const auto right = readEdgeValue(node, "padding", "paddingRight", all);
+    const auto bottom = readEdgeValue(node, "padding", "paddingBottom", all);
+    const auto left = readEdgeValue(node, "padding", "paddingLeft", all);
+    return { static_cast<int>(top), static_cast<int>(left), static_cast<int>(bottom), static_cast<int>(right) };
+}
+
+static juce::BorderSize<int> readBorderWidthInsets(const ElementNode& node)
+{
+    const auto all = readOptionalNumberProp(node, "borderWidth").value_or(0.0f);
+    const auto top = readEdgeValue(node, "borderWidth", "borderTopWidth", all);
+    const auto right = readEdgeValue(node, "borderWidth", "borderRightWidth", all);
+    const auto bottom = readEdgeValue(node, "borderWidth", "borderBottomWidth", all);
+    const auto left = readEdgeValue(node, "borderWidth", "borderLeftWidth", all);
+    return { static_cast<int>(top), static_cast<int>(left), static_cast<int>(bottom), static_cast<int>(right) };
+}
+
+static bool readBoxSizingBorderBox(const ElementNode& node)
+{
+    const auto text = readOptionalTextProp(node, "boxSizing").value_or("content-box").toLowerCase();
+    return text == "border-box";
+}
+
 static ChildLayoutStyle readChildLayoutStyle(const ElementNode& node)
 {
     ChildLayoutStyle style;
 
-    style.width = readOptionalNumberProp(node, "width").value_or(-1.0f);
+    if (const auto* widthVar = node.props.getVarPointer("width"))
+        style.widthSpec = parseCssLength(*widthVar);
+    else if (const auto w = readOptionalNumberProp(node, "width"))
+        style.widthSpec = *w < 0.0f ? CssLength{} : CssLength{ CssLength::Kind::Px, *w };
+
+    if (const auto* heightVar = node.props.getVarPointer("height"))
+        style.heightSpec = parseCssLength(*heightVar);
+    else if (const auto h = readOptionalNumberProp(node, "height"))
+        style.heightSpec = *h < 0.0f ? CssLength{} : CssLength{ CssLength::Kind::Px, *h };
+
     style.minWidth = readOptionalNumberProp(node, "minWidth").value_or(0.0f);
     style.maxWidth = readOptionalNumberProp(node, "maxWidth").value_or(-1.0f);
-    style.height = readOptionalNumberProp(node, "height").value_or(-1.0f);
     style.minHeight = readOptionalNumberProp(node, "minHeight").value_or(0.0f);
     style.maxHeight = readOptionalNumberProp(node, "maxHeight").value_or(-1.0f);
     style.flexGrow = readOptionalNumberProp(node, "grow").value_or(1.0f);
@@ -305,6 +517,20 @@ static ChildLayoutStyle readChildLayoutStyle(const ElementNode& node)
     style.flexBasis = readOptionalNumberProp(node, "basis").value_or(-2.0f);
     style.order = static_cast<int>(readOptionalNumberProp(node, "order").value_or(0.0f));
     style.alignSelf = parseAlignSelf(readOptionalTextProp(node, "alignSelf").value_or(juce::String()));
+    style.display = readOptionalTextProp(node, "display").value_or("block").toLowerCase();
+    style.padding = readPaddingInsets(node);
+    style.border = readBorderWidthInsets(node);
+    style.boxSizingBorderBox = readBoxSizingBorderBox(node);
+    style.position = readOptionalTextProp(node, "position").value_or("static").toLowerCase();
+    if (const auto* v = node.props.getVarPointer("top"))
+        style.topSpec = parseCssLength(*v);
+    if (const auto* v = node.props.getVarPointer("right"))
+        style.rightSpec = parseCssLength(*v);
+    if (const auto* v = node.props.getVarPointer("bottom"))
+        style.bottomSpec = parseCssLength(*v);
+    if (const auto* v = node.props.getVarPointer("left"))
+        style.leftSpec = parseCssLength(*v);
+    style.zIndex = static_cast<int>(readOptionalNumberProp(node, "zIndex").value_or(0.0f));
 
     style.margin.left = readEdgeValue(node, "margin", "marginLeft", 0.0f);
     style.margin.right = readEdgeValue(node, "margin", "marginRight", 0.0f);
@@ -318,6 +544,22 @@ class ViewComponent final : public juce::Component
 {
 public:
     explicit ViewComponent(bool isRow) : row(isRow) {}
+
+    static bool isOutOfFlow(const ChildLayoutStyle& s)
+    {
+        return s.position == "absolute" || s.position == "fixed";
+    }
+
+    juce::Rectangle<int> paddingBox() const
+    {
+        auto r = getLocalBounds();
+        return borderInsets.subtractedFrom(r);
+    }
+
+    juce::Rectangle<int> contentBoxForChildren() const
+    {
+        return paddingInsets.subtractedFrom(paddingBox());
+    }
 
     void paint(juce::Graphics& g) override
     {
@@ -338,15 +580,40 @@ public:
             g.fillAll(*backgroundColour);
         }
 
-        if (borderWidth > 0.0f && borderColour.has_value())
+        drawBorderEdges(g);
+    }
+
+    void paintOverChildren(juce::Graphics& g) override
+    {
+        if (!debugLayout)
+            return;
+
+        g.setColour(juce::Colours::limegreen.withAlpha(0.45f));
+        for (auto* c : getChildren())
         {
-            g.setColour(*borderColour);
-            g.drawRect(getLocalBounds(), static_cast<int>(borderWidth));
+            if (c == nullptr || !c->isVisible())
+                continue;
+            g.drawRect(c->getBounds(), 1);
         }
     }
 
     void resized() override
     {
+        if (display == "none")
+            return;
+
+        const auto inner = contentBoxForChildren();
+        const bool useFlex = display == "flex" || row;
+
+        if (!useFlex)
+        {
+            layoutAsBlock(inner);
+            layoutAbsoluteChildren(inner);
+            applyRelativeOffsets(inner);
+            applyChildZOrder();
+            return;
+        }
+
         juce::FlexBox fb;
         fb.flexDirection = parseDirection(direction, row);
         fb.flexWrap = parseWrap(wrap);
@@ -354,15 +621,33 @@ public:
         fb.alignItems = parseAlignItems(alignItems);
         fb.alignContent = parseAlignContent(alignContent);
 
+        const float innerW = static_cast<float>(juce::jmax(0, inner.getWidth()));
+        const float innerH = static_cast<float>(juce::jmax(0, inner.getHeight()));
+
         for (int index = 0; index < children.size(); ++index)
         {
             auto* c = children[index];
             const auto& s = childStyles.getReference(index);
+            if (s.display == "none")
+            {
+                c->setVisible(false);
+                continue;
+            }
+
+            if (isOutOfFlow(s))
+            {
+                c->setVisible(true);
+                continue;
+            }
+
+            c->setVisible(true);
             auto item = juce::FlexItem(*c);
-            item.width = s.width;
+            const auto outerW = cssWidthToOuterPx(s.widthSpec, innerW, s.padding, s.border, s.boxSizingBorderBox);
+            const auto outerH = cssHeightToOuterPx(s.heightSpec, innerH, s.padding, s.border, s.boxSizingBorderBox);
+            item.width = outerW >= 0.0f ? outerW : -1.0f;
+            item.height = outerH >= 0.0f ? outerH : -1.0f;
             item.minWidth = s.minWidth;
             item.maxWidth = s.maxWidth;
-            item.height = s.height;
             item.minHeight = s.minHeight;
             item.maxHeight = s.maxHeight;
             item.flexGrow = s.flexGrow;
@@ -387,7 +672,201 @@ public:
             fb.items.add(item);
         }
 
-        fb.performLayout(getLocalBounds().reduced(static_cast<int>(padding)).toFloat());
+        fb.performLayout(inner.toFloat());
+        layoutAbsoluteChildren(inner);
+        applyRelativeOffsets(inner);
+        applyChildZOrder();
+    }
+
+    void drawBorderEdges(juce::Graphics& g) const
+    {
+        const auto full = getLocalBounds();
+        const auto top = borderInsets.getTop();
+        const auto left = borderInsets.getLeft();
+        const auto bottom = borderInsets.getBottom();
+        const auto right = borderInsets.getRight();
+
+        if (top <= 0 && left <= 0 && bottom <= 0 && right <= 0)
+            return;
+
+        const juce::Colour fallback = borderColour.value_or(juce::Colours::transparentBlack);
+        const auto cTop = pickBorderPaintColour(borderTopColour, fallback);
+        const auto cRight = pickBorderPaintColour(borderRightColour, fallback);
+        const auto cBottom = pickBorderPaintColour(borderBottomColour, fallback);
+        const auto cLeft = pickBorderPaintColour(borderLeftColour, fallback);
+
+        if (top > 0)
+        {
+            g.setColour(cTop);
+            g.fillRect(0, 0, full.getWidth(), top);
+        }
+        if (bottom > 0)
+        {
+            g.setColour(cBottom);
+            g.fillRect(0, full.getBottom() - bottom, full.getWidth(), bottom);
+        }
+        if (left > 0)
+        {
+            g.setColour(cLeft);
+            g.fillRect(0, top, left, full.getHeight() - top - bottom);
+        }
+        if (right > 0)
+        {
+            g.setColour(cRight);
+            g.fillRect(full.getRight() - right, top, right, full.getHeight() - top - bottom);
+        }
+    }
+
+    void layoutAsBlock(const juce::Rectangle<int>& content)
+    {
+        int y = content.getY();
+
+        for (int index = 0; index < children.size(); ++index)
+        {
+            auto* c = children[index];
+            const auto& s = childStyles.getReference(index);
+            if (s.display == "none")
+            {
+                c->setVisible(false);
+                continue;
+            }
+
+            if (isOutOfFlow(s))
+            {
+                c->setVisible(true);
+                continue;
+            }
+
+            c->setVisible(true);
+
+            const int marginTop = static_cast<int>(s.margin.top);
+            const int marginRight = static_cast<int>(s.margin.right);
+            const int marginBottom = static_cast<int>(s.margin.bottom);
+            const int marginLeft = static_cast<int>(s.margin.left);
+
+            y += marginTop;
+
+            const float innerW = static_cast<float>(juce::jmax(0, content.getWidth() - marginLeft - marginRight));
+            const float innerH = static_cast<float>(juce::jmax(0, content.getHeight()));
+
+            float outerW = cssWidthToOuterPx(s.widthSpec, innerW, s.padding, s.border, s.boxSizingBorderBox);
+            if (outerW < 0.0f)
+                outerW = static_cast<float>(juce::jmax(0, content.getWidth() - marginLeft - marginRight));
+
+            int childWidth = static_cast<int>(outerW);
+            if (s.maxWidth >= 0.0f)
+                childWidth = juce::jmin(childWidth, static_cast<int>(s.maxWidth));
+            childWidth = juce::jmax(static_cast<int>(s.minWidth), childWidth);
+            childWidth = juce::jmax(0, childWidth);
+
+            float outerH = cssHeightToOuterPx(s.heightSpec, innerH, s.padding, s.border, s.boxSizingBorderBox);
+            if (outerH < 0.0f)
+                outerH = 30.0f;
+
+            int childHeight = static_cast<int>(outerH);
+            if (s.maxHeight >= 0.0f)
+                childHeight = juce::jmin(childHeight, static_cast<int>(s.maxHeight));
+            childHeight = juce::jmax(static_cast<int>(s.minHeight), childHeight);
+            childHeight = juce::jmax(0, childHeight);
+
+            c->setBounds(content.getX() + marginLeft, y, childWidth, childHeight);
+            y += childHeight + marginBottom;
+        }
+    }
+
+    void layoutAbsoluteChildren(const juce::Rectangle<int>& containingBlock)
+    {
+        const float cw = static_cast<float>(juce::jmax(0, containingBlock.getWidth()));
+        const float ch = static_cast<float>(juce::jmax(0, containingBlock.getHeight()));
+
+        for (int index = 0; index < children.size(); ++index)
+        {
+            auto* c = children[index];
+            const auto& s = childStyles.getReference(index);
+            if (s.display == "none" || !isOutOfFlow(s))
+                continue;
+
+            float outerW = cssWidthToOuterPx(s.widthSpec, cw, s.padding, s.border, s.boxSizingBorderBox);
+            if (outerW < 0.0f)
+                outerW = static_cast<float>(c->getWidth() > 0 ? c->getWidth() : 100);
+
+            float outerH = cssHeightToOuterPx(s.heightSpec, ch, s.padding, s.border, s.boxSizingBorderBox);
+            if (outerH < 0.0f)
+                outerH = static_cast<float>(c->getHeight() > 0 ? c->getHeight() : 30);
+
+            int w = static_cast<int>(outerW);
+            int h = static_cast<int>(outerH);
+            if (s.maxWidth >= 0.0f)
+                w = juce::jmin(w, static_cast<int>(s.maxWidth));
+            w = juce::jmax(static_cast<int>(s.minWidth), w);
+            if (s.maxHeight >= 0.0f)
+                h = juce::jmin(h, static_cast<int>(s.maxHeight));
+            h = juce::jmax(static_cast<int>(s.minHeight), h);
+
+            const float leftPx = resolveCssLengthPx(s.leftSpec, cw);
+            const float rightPx = resolveCssLengthPx(s.rightSpec, cw);
+            const float topPx = resolveCssLengthPx(s.topSpec, ch);
+            const float bottomPx = resolveCssLengthPx(s.bottomSpec, ch);
+
+            int x = containingBlock.getX();
+            int y = containingBlock.getY();
+
+            if (leftPx >= 0.0f)
+                x += static_cast<int>(leftPx);
+            else if (rightPx >= 0.0f)
+                x = containingBlock.getRight() - w - static_cast<int>(rightPx);
+
+            if (topPx >= 0.0f)
+                y += static_cast<int>(topPx);
+            else if (bottomPx >= 0.0f)
+                y = containingBlock.getBottom() - h - static_cast<int>(bottomPx);
+
+            c->setBounds(x, y, w, h);
+        }
+    }
+
+    void applyRelativeOffsets(const juce::Rectangle<int>& containingBlock)
+    {
+        (void)containingBlock;
+
+        for (int index = 0; index < children.size(); ++index)
+        {
+            auto* c = children[index];
+            const auto& s = childStyles.getReference(index);
+            if (s.display == "none" || s.position != "relative")
+                continue;
+
+            const auto b = c->getBounds();
+            const float dx = resolveCssLengthPx(s.leftSpec, static_cast<float>(b.getWidth()));
+            const float dy = resolveCssLengthPx(s.topSpec, static_cast<float>(b.getHeight()));
+            int ox = 0;
+            int oy = 0;
+            if (dx >= 0.0f)
+                ox = static_cast<int>(dx);
+            if (dy >= 0.0f)
+                oy = static_cast<int>(dy);
+            c->setBounds(b.translated(ox, oy));
+        }
+    }
+
+    void applyChildZOrder()
+    {
+        std::vector<std::pair<int, int>> order;
+        order.reserve(static_cast<size_t>(children.size()));
+        for (int i = 0; i < children.size(); ++i)
+            order.emplace_back(childStyles.getReference(i).zIndex, i);
+
+        std::stable_sort(order.begin(), order.end(), [](const auto& a, const auto& b)
+                         {
+                             return a.first < b.first;
+                         });
+
+        for (const auto& entry : order)
+        {
+            auto* c = children[entry.second];
+            if (c != nullptr)
+                c->toFront(false);
+        }
     }
 
     juce::Array<juce::Component*> children;
@@ -398,12 +877,18 @@ public:
     std::optional<juce::Colour> gradientTo;
     bool gradientVertical = true;
     std::optional<juce::Colour> borderColour;
-    float borderWidth = 0.0f;
-    float padding = 0.0f;
+    std::optional<juce::Colour> borderTopColour;
+    std::optional<juce::Colour> borderRightColour;
+    std::optional<juce::Colour> borderBottomColour;
+    std::optional<juce::Colour> borderLeftColour;
+    juce::BorderSize<int> borderInsets;
+    juce::BorderSize<int> paddingInsets;
+    bool debugLayout = false;
     float gap = 0.0f;
     float rowGap = 0.0f;
     float columnGap = 0.0f;
     juce::String direction;
+    juce::String display = "block";
     juce::String wrap = "nowrap";
     juce::String justify = "flex-start";
     juce::String alignItems = "stretch";
@@ -428,6 +913,12 @@ public:
         repaint();
     }
 
+    void setTextJustification(juce::Justification j)
+    {
+        textJustification = j;
+        repaint();
+    }
+
     void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
     {
         auto baseColour = findColour(juce::TextButton::buttonColourId);
@@ -441,7 +932,7 @@ public:
 
         g.setColour(findColour(juce::TextButton::textColourOffId));
         g.setFont(textFont);
-        g.drawFittedText(getButtonText(), getLocalBounds().reduced(6, 2), juce::Justification::centred, 1);
+        g.drawFittedText(getButtonText(), getLocalBounds().reduced(6, 2), textJustification, 1);
 
         if (borderColour.has_value() && borderWidth > 0.0f)
         {
@@ -456,6 +947,7 @@ private:
     std::optional<juce::Colour> borderColour;
     float borderWidth = 0.0f;
     juce::Font textFont { juce::FontOptions(14.0f) };
+    juce::Justification textJustification { juce::Justification::centred };
 };
 
 static juce::var readVarProp(const ElementNode& node, const juce::String& name)
@@ -501,6 +993,18 @@ static juce::String readCallbackId(const ElementNode& node)
     return {};
 }
 
+static juce::Justification parseTextAlign(const juce::String& rawText)
+{
+    const auto s = rawText.trim().toLowerCase();
+    if (s == "center" || s == "centre")
+        return juce::Justification::centred;
+    if (s == "right" || s == "end")
+        return juce::Justification::centredRight;
+    if (s == "justify")
+        return juce::Justification::horizontallyJustified;
+    return juce::Justification::centredLeft;
+}
+
 static std::unique_ptr<juce::Component> buildComponent(
     const ElementNode& node,
     const std::function<void(const juce::String&, const juce::var&)>& onControl)
@@ -509,7 +1013,7 @@ static std::unique_ptr<juce::Component> buildComponent(
     {
         auto label = std::make_unique<juce::Label>();
         label->setText(readTextProp(node, "text"), juce::dontSendNotification);
-        label->setJustificationType(juce::Justification::centredLeft);
+        label->setJustificationType(parseTextAlign(readTextProp(node, "textAlign")));
         label->setFont(applyFontProps(node, label->getFont()));
         if (const auto colour = readColourProp(node, "color"))
             label->setColour(juce::Label::textColourId, *colour);
@@ -540,6 +1044,7 @@ static std::unique_ptr<juce::Component> buildComponent(
         if (const auto colour = readColourProp(node, "background"))
             button->setColour(juce::TextButton::buttonColourId, *colour);
         button->setTextFont(applyFontProps(node, juce::Font(juce::FontOptions(14.0f))));
+        button->setTextJustification(parseTextAlign(readTextProp(node, "textAlign")));
         button->setBorderStyle(readColourProp(node, "borderColor"),
                                static_cast<float>(readNumberProp(node, "borderWidth", 0.0)));
         return button;
@@ -566,6 +1071,7 @@ static std::unique_ptr<juce::Component> buildComponent(
         auto editor = std::make_unique<juce::TextEditor>();
         editor->setText(readTextProp(node, "text"));
         editor->applyFontToAllText(applyFontProps(node, editor->getFont()));
+        editor->setJustification(parseTextAlign(readTextProp(node, "textAlign")));
         const auto callbackId = readCallbackId(node);
         if (callbackId.isNotEmpty() && onControl != nullptr)
         {
@@ -589,12 +1095,18 @@ static std::unique_ptr<juce::Component> buildComponent(
     view->gradientTo = readColourProp(node, "gradientTo");
     view->gradientVertical = readNumberProp(node, "gradientVertical", 1.0) != 0.0;
     view->borderColour = readColourProp(node, "borderColor");
-    view->borderWidth = static_cast<float>(readNumberProp(node, "borderWidth", 0.0));
-    view->padding = static_cast<float>(readNumberProp(node, "padding", 0.0));
+    view->borderTopColour = readColourProp(node, "borderTopColor");
+    view->borderRightColour = readColourProp(node, "borderRightColor");
+    view->borderBottomColour = readColourProp(node, "borderBottomColor");
+    view->borderLeftColour = readColourProp(node, "borderLeftColor");
+    view->borderInsets = readBorderWidthInsets(node);
+    view->paddingInsets = readPaddingInsets(node);
+    view->debugLayout = readOptionalNumberProp(node, "debugLayout").value_or(0.0f) != 0.0f;
     view->gap = static_cast<float>(readNumberProp(node, "gap", 0.0));
     view->rowGap = static_cast<float>(readNumberProp(node, "rowGap", 0.0));
     view->columnGap = static_cast<float>(readNumberProp(node, "columnGap", 0.0));
     view->direction = readTextProp(node, "direction");
+    view->display = readOptionalTextProp(node, "display").value_or(node.type == "View" ? "block" : "flex").toLowerCase();
     view->wrap = readTextProp(node, "wrap");
     view->justify = readTextProp(node, "justify");
     view->alignItems = readTextProp(node, "alignItems");

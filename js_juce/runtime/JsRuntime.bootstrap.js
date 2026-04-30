@@ -1,14 +1,9 @@
 const __jsJuceStyleContextStack = [Object.create(null)];
 let __jsJuceGlobalStyle = {};
+const __jsJuceDebugFlags = { layout: false, styleDump: false, fontLogs: false };
 
 function __jsJuceCurrentStyleContext() {
   return __jsJuceStyleContextStack[__jsJuceStyleContextStack.length - 1];
-}
-
-function __jsJuceResolveContextStyle(typeName, ownProps) {
-  const scope = __jsJuceCurrentStyleContext();
-  const defaults = (scope && scope[typeName]) || {};
-  return { ...defaults, ...(ownProps || {}) };
 }
 
 function __jsJuceFlattenChildren(input, out = []) {
@@ -30,6 +25,7 @@ function __jsJuceNormalizeStyleProps(props) {
   if (style.border !== undefined) merged.borderColor = style.border;
   if (style.borderSize !== undefined) merged.borderWidth = style.borderSize;
   if (style.flexDirection !== undefined) merged.direction = style.flexDirection;
+  if (style.display !== undefined) merged.display = style.display;
   if (style.justifyContent !== undefined) merged.justify = style.justifyContent;
   if (style.alignItems !== undefined) merged.alignItems = style.alignItems;
   if (style.alignContent !== undefined) merged.alignContent = style.alignContent;
@@ -51,7 +47,39 @@ function __jsJuceNormalizeStyleProps(props) {
   if (style.gradientVertical !== undefined) merged.gradientVertical = style.gradientVertical ? 1 : 0;
   if (style.borderColor !== undefined) merged.borderColor = style.borderColor;
   if (style.borderWidth !== undefined) merged.borderWidth = style.borderWidth;
+  if (style.borderTopWidth !== undefined) merged.borderTopWidth = style.borderTopWidth;
+  if (style.borderRightWidth !== undefined) merged.borderRightWidth = style.borderRightWidth;
+  if (style.borderBottomWidth !== undefined) merged.borderBottomWidth = style.borderBottomWidth;
+  if (style.borderLeftWidth !== undefined) merged.borderLeftWidth = style.borderLeftWidth;
+  if (style.borderTopColor !== undefined) merged.borderTopColor = style.borderTopColor;
+  if (style.borderRightColor !== undefined) merged.borderRightColor = style.borderRightColor;
+  if (style.borderBottomColor !== undefined) merged.borderBottomColor = style.borderBottomColor;
+  if (style.borderLeftColor !== undefined) merged.borderLeftColor = style.borderLeftColor;
   if (style.padding !== undefined) merged.padding = style.padding;
+  if (style.paddingTop !== undefined) merged.paddingTop = style.paddingTop;
+  if (style.paddingRight !== undefined) merged.paddingRight = style.paddingRight;
+  if (style.paddingBottom !== undefined) merged.paddingBottom = style.paddingBottom;
+  if (style.paddingLeft !== undefined) merged.paddingLeft = style.paddingLeft;
+  if (style.boxSizing !== undefined) merged.boxSizing = style.boxSizing;
+  if (style.position !== undefined) merged.position = style.position;
+  if (style.top !== undefined) merged.top = style.top;
+  if (style.right !== undefined) merged.right = style.right;
+  if (style.bottom !== undefined) merged.bottom = style.bottom;
+  if (style.left !== undefined) merged.left = style.left;
+  if (style.zIndex !== undefined) merged.zIndex = style.zIndex;
+  if (style.width !== undefined) merged.width = style.width;
+  if (style.height !== undefined) merged.height = style.height;
+  if (style.minWidth !== undefined) merged.minWidth = style.minWidth;
+  if (style.maxWidth !== undefined) merged.maxWidth = style.maxWidth;
+  if (style.minHeight !== undefined) merged.minHeight = style.minHeight;
+  if (style.maxHeight !== undefined) merged.maxHeight = style.maxHeight;
+  if (style.textAlign !== undefined) merged.textAlign = style.textAlign;
+  if (style.fontStyle !== undefined) merged.fontStyle = style.fontStyle;
+  if (style.lineHeight !== undefined) merged.lineHeight = style.lineHeight;
+  if (style.letterSpacing !== undefined) merged.letterSpacing = style.letterSpacing;
+  if (style.fontFamilies !== undefined) merged.fontFamilies = style.fontFamilies;
+  if (style.debugLayout !== undefined) merged.debugLayout = style.debugLayout;
+  if (style.debugFont !== undefined) merged.debugFont = style.debugFont;
   if (style.color !== undefined) merged.color = style.color;
   if (style.background !== undefined) merged.background = style.background;
 
@@ -59,11 +87,15 @@ function __jsJuceNormalizeStyleProps(props) {
   return merged;
 }
 
-function __jsJuceMergeGlobalStyle(nodeProps) {
-  if (!__jsJuceGlobalStyle || typeof __jsJuceGlobalStyle !== "object")
-    return nodeProps || {};
-
-  return { ...__jsJuceGlobalStyle, ...(nodeProps || {}) };
+function __jsJuceMergeStyle(typeName, props) {
+  const merged = {};
+  const scope = __jsJuceCurrentStyleContext();
+  const defaults = (scope && scope[typeName]) || {};
+  Object.assign(merged, defaults);
+  if (__jsJuceGlobalStyle && typeof __jsJuceGlobalStyle === "object")
+    Object.assign(merged, __jsJuceGlobalStyle);
+  Object.assign(merged, props || {});
+  return __jsJuceNormalizeStyleProps(merged);
 }
 
 let __jsJuceNextCallbackId = 1;
@@ -101,9 +133,7 @@ function __jsJuceNormalizeNode(node) {
   const children = __jsJuceFlattenChildren(rawChildren).map(__jsJuceNormalizeNode);
   return __jsJuceCreateElement(
     node.type || "View",
-    __jsJuceWrapFunctionsForTransport(
-      __jsJuceMergeGlobalStyle(__jsJuceNormalizeStyleProps(node.props || {}))
-    ),
+    __jsJuceWrapFunctionsForTransport(__jsJuceMergeStyle(node.type || "View", node.props || {})),
     ...children
   );
 }
@@ -113,7 +143,7 @@ class View {
     const hasProps = props != null && typeof props === "object" && !Array.isArray(props) && typeof props.toElement !== "function";
     const effectiveProps = hasProps ? props : {};
     const effectiveChildren = hasProps ? children : props;
-    this.props = __jsJuceResolveContextStyle(this.type(), __jsJuceNormalizeStyleProps(effectiveProps));
+    this.props = __jsJuceMergeStyle(this.type(), effectiveProps);
     this.children = __jsJuceFlattenChildren(effectiveChildren);
   }
   type() { return "View"; }
@@ -146,6 +176,7 @@ class View {
   setFlexBasis(basis) { return this.style({ basis }); }
   setAlignSelf(value) { return this.style({ alignSelf: value }); }
   setDirection(value) { return this.style({ direction: value }); }
+  setDisplay(value) { return this.style({ display: value }); }
   setWrap(value) { return this.style({ wrap: value }); }
   setJustify(value) { return this.style({ justify: value }); }
   setAlignItems(value) { return this.style({ alignItems: value }); }
@@ -153,6 +184,7 @@ class View {
   setGap(value) { return this.style({ gap: value }); }
   setRowGap(value) { return this.style({ rowGap: value }); }
   setColumnGap(value) { return this.style({ columnGap: value }); }
+  setBoxSizing(value) { return this.style({ boxSizing: value }); }
   setFontFamily(value) { return this.style({ fontFamily: value }); }
   setFontFile(value) { return this.style({ fontFile: value }); }
   setFontSize(value) { return this.style({ fontSize: value }); }
@@ -164,7 +196,10 @@ class View {
     this.children.push(...__jsJuceFlattenChildren(children));
     return this;
   }
-  toElement() { return __jsJuceCreateElement(this.type(), this.props, ...this.children.map(__jsJuceNormalizeNode)); }
+  toElement() {
+    const merged = __jsJuceMergeStyle(this.type(), this.props);
+    return __jsJuceCreateElement(this.type(), __jsJuceWrapFunctionsForTransport(merged), ...this.children.map(__jsJuceNormalizeNode));
+  }
 }
 
 class Row extends View { type() { return "Row"; } }
@@ -206,13 +241,20 @@ class TextInput extends View {
   type() { return "TextInput"; }
 }
 
+function __jsJuceMapIntrinsicTag(type) {
+  if (type === "div") return "View";
+  if (type === "span" || type === "p") return "Text";
+  return type;
+}
+
 function h(type, props, ...children) {
   if (typeof type === "function") {
     return type({ ...(props || {}), children });
   }
+  const mapped = __jsJuceMapIntrinsicTag(type);
   return __jsJuceCreateElement(
-    type,
-    __jsJuceWrapFunctionsForTransport(__jsJuceNormalizeStyleProps(props || {})),
+    mapped,
+    __jsJuceWrapFunctionsForTransport(__jsJuceMergeStyle(mapped, props || {})),
     ...__jsJuceFlattenChildren(children).map(__jsJuceNormalizeNode)
   );
 }
@@ -238,14 +280,22 @@ function createFontPreset(fontProps = {}) {
   return preset;
 }
 
+function __jsJuceApplyDebugLayout(node) {
+  if (node == null || typeof node !== "object")
+    return;
+  const t = node.type;
+  if (t === "View" || t === "Row" || t === "Column")
+    node.props = { ...(node.props || {}), debugLayout: 1 };
+  const ch = node.children;
+  if (Array.isArray(ch))
+    for (const c of ch) __jsJuceApplyDebugLayout(c);
+}
+
 globalThis.JuceUI = {
   createElement: function(type, props, ...children) {
     return h(type, props, ...children);
   },
   h,
-  render: function(tree) {
-    __jsJuceRender(__jsJuceNormalizeNode(tree));
-  },
   withStyleContext: function(contextObject, buildFn) {
     const parent = __jsJuceCurrentStyleContext();
     const merged = Object.create(parent || null);
@@ -264,6 +314,20 @@ globalThis.JuceUI = {
   },
   getGlobalStyle: function() {
     return { ...__jsJuceGlobalStyle };
+  },
+  setDebugFlags: function(flags) {
+    Object.assign(__jsJuceDebugFlags, flags || {});
+  },
+  getDebugFlags: function() {
+    return { ...__jsJuceDebugFlags };
+  },
+  render: function(tree) {
+    const normalized = __jsJuceNormalizeNode(tree);
+    if (__jsJuceDebugFlags.layout)
+      __jsJuceApplyDebugLayout(normalized);
+    if (__jsJuceDebugFlags.styleDump && typeof console !== "undefined" && console.log)
+      console.log("[js_juce] computed element tree", normalized);
+    __jsJuceRender(normalized);
   }
 };
 
@@ -281,7 +345,10 @@ globalThis.JSJuce = {
   Button: (nameOrText, x, y) => new Button(nameOrText, { x, y }),
   Slider: (nameOrProps, x, y) => new Slider({ name: nameOrProps, x, y }),
   TextInput: (nameOrProps, x, y) => new TextInput({ name: nameOrProps, x, y }),
-  Font: (fontProps = {}) => createFontPreset(fontProps)
+  Font: (fontProps = {}) => createFontPreset(fontProps),
+  div: (nameOrProps, x, y) => new View({ name: nameOrProps, x, y }),
+  span: (nameOrText, x, y) => new Text(nameOrText, { x, y }),
+  p: (nameOrText, x, y) => new Text(nameOrText, { x, y })
 };
 
 globalThis.View = View;
@@ -298,3 +365,6 @@ globalThis.text = text;
 globalThis.button = button;
 globalThis.slider = slider;
 globalThis.textInput = textInput;
+globalThis.div = view;
+globalThis.span = text;
+globalThis.p = text;

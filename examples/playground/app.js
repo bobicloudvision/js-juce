@@ -4,14 +4,19 @@ const HRow = JSJuce.Row;
 const VBox = JSJuce.Column;
 const Input = JSJuce.TextInput;
 const Range = JSJuce.Slider;
+const Div = JSJuce.div;
 
-const MyFont = JSJuce.Font({
+const APP_FONT = JSJuce.Font({
   fontFile: "examples/playground/assets/fonts/Outfit[wght].ttf",
   fontFamily: "Outfit",
   fontSize: 14,
   fontWeight: "400"
 });
-JuceUI.setGlobalStyle(MyFont);
+
+const GLOBAL_STYLE = {
+  boxSizing: "border-box"
+};
+JuceUI.setGlobalStyle(GLOBAL_STYLE);
 
 const THEME = {
   colors: {
@@ -52,7 +57,7 @@ const THEME = {
     lg: 10
   },
   size: {
-    tabMinW: 110,
+    tabMinW: 100,
     tabMinH: 30
   },
   styles: {
@@ -67,9 +72,12 @@ const THEME = {
 
 const TABS = {
   LAYOUT: "layout",
+  BLOCK: "block",
   SIZING: "sizing",
+  POSITION: "position",
   CONTROLS: "controls",
-  TYPOGRAPHY: "typography"
+  TYPOGRAPHY: "typography",
+  DEBUG: "debug"
 };
 
 let activeTab = TABS.LAYOUT;
@@ -95,7 +103,7 @@ function makeTabButton(label, tabId) {
 }
 
 function buildLayoutTab() {
-  const title = Txt("Layout: direction/wrap/justify/align/items").setColor(THEME.colors.text.section);
+  const title = Txt("Layout: flex + gaps").setColor(THEME.colors.text.section);
   const flexRow = HRow("FlexRow", 0, 0)
     .css({
       ...cardBase(),
@@ -125,35 +133,93 @@ function buildLayoutTab() {
   return [title, flexRow];
 }
 
+function buildBlockTab() {
+  const title = Txt("Block: display:block stacks children").setColor(THEME.colors.text.section);
+  const blockHost = Div("BlockHost", 0, 0).css({
+    ...cardBase(),
+    display: "block",
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingLeft: 12,
+    paddingRight: 12,
+    borderTopWidth: 2,
+    borderBottomWidth: 2,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: THEME.colors.accent.a,
+    boxSizing: "border-box"
+  });
+
+  const a = Btn("Block item 1", 0, 0).setBackground(THEME.colors.accent.b).setColor(THEME.colors.text.primary)
+    .setSize(200, 28)
+    .setMargin(THEME.space.xxs);
+  const b = Btn("Block item 2", 0, 0).setBackground(THEME.colors.accent.c).setColor(THEME.colors.text.primary)
+    .setSize(240, 28)
+    .setMargin(THEME.space.xxs);
+
+  blockHost.add(a, b);
+  return [title, blockHost];
+}
+
 function buildSizingTab() {
-  const title = Txt("Sizing: width/min/max + grow/shrink/basis").setColor(THEME.colors.text.section);
+  const title = Txt("Sizing: flex + % width + border-box").setColor(THEME.colors.text.section);
   const sizingDemo = HRow("SizingDemo", 0, 0)
     .css({
       ...cardBase(),
       gap: THEME.space.md
     });
 
-  const fixedLeft = Input({ text: "Fixed width=180, margin=6" })
+  const fixedLeft = Input({ text: "width=180" })
     .setColor(THEME.colors.text.primary)
     .setBackground(THEME.colors.bg.input)
     .setSize(180, 30)
     .setMargin(THEME.space.sm);
 
-  const flexibleCenter = Input({ text: "grow=2 shrink=1 basis=120 min=120 max=420" })
+  const pctCenter = Input({ text: "width ~45% of row" })
     .setColor(THEME.colors.text.primary)
     .setBackground(THEME.colors.bg.input)
-    .setMinSize(120, 30)
-    .setMaxSize(420, 30)
+    .css({ width: "45%", minWidth: 120, height: 30, boxSizing: "border-box" })
     .setMargin(THEME.space.sm);
 
-  const flexibleRight = Input({ text: "grow=1 shrink=2 basis=90" })
+  const flexibleRight = Input({ text: "grow=1" })
     .setColor(THEME.colors.text.primary)
     .setBackground(THEME.colors.bg.input)
     .setMinSize(90, 30)
+    .setFlex(1, 1, 0)
     .setMargin(THEME.space.sm);
 
-  sizingDemo.add(fixedLeft, flexibleCenter, flexibleRight);
+  sizingDemo.add(fixedLeft, pctCenter, flexibleRight);
   return [title, sizingDemo];
+}
+
+function buildPositionTab() {
+  const title = Txt("Position: absolute + zIndex").setColor(THEME.colors.text.section);
+  const host = Div("PosHost", 0, 0).css({
+    ...cardBase(),
+    backgroundColor: "#252d3a",
+    minHeight: 100,
+    padding: 8,
+    position: "relative",
+    boxSizing: "border-box"
+  });
+  const hint = Txt("Corner badge is position:absolute inside relative host").setColor(THEME.colors.text.muted)
+    .setMargin(4);
+  const badge = Btn("Absolute", 0, 0).setFontSize(13).css({
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    width: 160,
+    height: 34,
+    zIndex: 2,
+    backgroundColor: "#3f5f8f",
+    color: "#f3f6fb",
+    textAlign: "center"
+  });
+  const zDemo = Txt("z-order: grey behind, violet on top").setColor(THEME.colors.text.muted).css({ marginTop: 52 });
+  const back = Div("ZBack", 0, 0).css({ zIndex: 0, backgroundColor: "#2b3443", width: 80, height: 40, position: "absolute", left: 8, top: 8 });
+  const front = Div("ZFront", 0, 0).css({ zIndex: 3, backgroundColor: "#556b8e", width: 80, height: 40, position: "absolute", left: 28, top: 20 });
+  host.add(hint, badge, zDemo, back, front);
+  return [title, host];
 }
 
 function buildControlsTab() {
@@ -193,58 +259,82 @@ function buildControlsTab() {
 }
 
 function buildTypographyTab() {
-  const title = Txt("Typography: custom font rendering (Outfit)").setColor(THEME.colors.text.section);
+  const title = Txt("Typography: weight 100–900, italic, lineHeight, letterSpacing, textAlign").setColor(THEME.colors.text.section);
   const typography = VBox("Typography", 0, 0)
     .css({
       ...cardBase(),
       gap: THEME.space.sm
     });
 
-  const display = Txt("Outfit 24 / Bold").setColor(THEME.colors.text.title)
+  const display = Txt("Outfit 24 / weight 800").setColor(THEME.colors.text.title)
     .setFontSize(24)
-    .setFontWeight("700");
+    .setFontWeight("800");
 
-  const heading = Txt("Outfit 18 / Semibold").setColor(THEME.colors.text.section)
-    .setFontSize(18)
-    .setFontWeight("600");
+  const italic = Txt("Italic + letterSpacing").setColor(THEME.colors.text.section)
+    .css({ fontStyle: "italic", letterSpacing: 1.2, fontSize: 15 });
 
-  const body = Txt("The quick brown fox jumps over the lazy dog 1234567890")
-    .setColor(THEME.colors.text.primary)
-    .setFontSize(14)
-    .setFontWeight("400");
+  const spaced = Txt("Line height ~1.8 (multiplier)").setColor(THEME.colors.text.primary)
+    .css({ lineHeight: 1.8, fontSize: 14 });
 
-  const note = Txt("If Outfit is not installed, JUCE will fall back automatically.")
-    .setColor(THEME.colors.text.muted)
-    .setFontSize(12)
-    .setFontWeight("400");
+  const centered = Txt("Centered label").setColor(THEME.colors.text.accent)
+    .css({ textAlign: "center", width: "100%", fontSize: 14 });
 
-  const input = Input({ text: "Typing sample in Outfit" })
+  const fallbackNote = Txt("fontFamily fallbacks: \"Georgia, serif\"").setColor(THEME.colors.text.muted)
+    .css({ fontFamily: "Georgia, serif", fontSize: 12 });
+
+  const input = Input({ text: "Input: centered text" })
     .setBackground(THEME.colors.bg.input)
     .setColor(THEME.colors.text.primary)
-    .setFontSize(14)
-    .setFontWeight("400");
+    .css({ textAlign: "center", fontSize: 14 });
 
-  const action = Btn("Outfit Button", 0, 0).css({
+  const action = Btn("Button 600 weight", 0, 0).css({
     backgroundColor: THEME.colors.accent.play,
-    color: THEME.colors.text.primary
-  })
-    .setFontSize(14)
-    .setFontWeight("600");
+    color: THEME.colors.text.primary,
+    fontWeight: "600",
+    fontSize: 14
+  });
 
-  typography.add(display, heading, body, note, input, action);
+  const semantic = Txt("Semantic: JuceUI.h(\"p\", ...) maps to Text (same as Txt)").setColor(THEME.colors.text.section)
+    .css({ color: THEME.colors.text.muted, fontSize: 12 });
+
+  typography.add(display, italic, spaced, centered, fallbackNote, input, action, semantic);
   return [title, typography];
 }
 
+function buildDebugTab() {
+  const title = Txt("Debug: layout overlay + style tree log").setColor(THEME.colors.text.section);
+  const flags = JuceUI.getDebugFlags();
+  const row = VBox("DebugCol", 0, 0).css({ ...cardBase(), gap: THEME.space.sm });
+  const state = Txt("layout=" + flags.layout + " styleDump=" + flags.styleDump).setColor(THEME.colors.text.muted);
+  const b1 = Btn("Toggle layout overlay", 0, 0).css({ backgroundColor: THEME.colors.accent.a, color: THEME.colors.text.primary });
+  b1.style({ onControl: function() {
+    const f = JuceUI.getDebugFlags();
+    JuceUI.setDebugFlags({ layout: !f.layout });
+    renderApp();
+  }});
+  const b2 = Btn("Toggle style console dump", 0, 0).css({ backgroundColor: THEME.colors.accent.b, color: THEME.colors.text.primary });
+  b2.style({ onControl: function() {
+    const f = JuceUI.getDebugFlags();
+    JuceUI.setDebugFlags({ styleDump: !f.styleDump });
+    renderApp();
+  }});
+  row.add(state, b1, b2);
+  return [title, row];
+}
+
 function buildTabContent() {
+  if (activeTab === TABS.BLOCK) return buildBlockTab();
   if (activeTab === TABS.SIZING) return buildSizingTab();
+  if (activeTab === TABS.POSITION) return buildPositionTab();
   if (activeTab === TABS.CONTROLS) return buildControlsTab();
   if (activeTab === TABS.TYPOGRAPHY) return buildTypographyTab();
+  if (activeTab === TABS.DEBUG) return buildDebugTab();
   return buildLayoutTab();
 }
 
 function renderApp() {
   const title = Txt("CSS Features Playground").setColor(THEME.colors.text.title);
-  const subtitle = Txt("Tabbed examples for all style props").setColor(THEME.colors.text.muted);
+  const subtitle = Txt("Milestones A–D: box model, sizing, position, typography, debug").setColor(THEME.colors.text.muted);
 
   const header = VBox("Header", 0, 0)
     .setBackground(THEME.colors.bg.header)
@@ -256,13 +346,17 @@ function renderApp() {
   const tabBar = HRow("TabBar", 0, 0)
     .css({
       ...cardBase(),
-      gap: THEME.space.sm
+      gap: THEME.space.sm,
+      flexWrap: "wrap"
     })
     .add(
       makeTabButton("Layout", TABS.LAYOUT),
+      makeTabButton("Block", TABS.BLOCK),
       makeTabButton("Sizing", TABS.SIZING),
+      makeTabButton("Position", TABS.POSITION),
       makeTabButton("Controls", TABS.CONTROLS),
-      makeTabButton("Typography", TABS.TYPOGRAPHY)
+      makeTabButton("Typography", TABS.TYPOGRAPHY),
+      makeTabButton("Debug", TABS.DEBUG)
     );
 
   const content = buildTabContent();
@@ -271,6 +365,7 @@ function renderApp() {
     .setGradient(THEME.colors.bg.appFrom, THEME.colors.bg.appTo, true)
     .setPadding(THEME.space.lg)
     .add(header, tabBarTitle, tabBar, ...content);
+  APP_FONT.applyTo(root);
 
   JuceUI.render(root);
 }
