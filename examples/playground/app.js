@@ -77,10 +77,7 @@ function makeTabButton(label, tabId) {
     marginRight: THEME.space.sm
   });
   tabButton
-    .setMinSize(THEME.size.tabMinW, THEME.size.tabMinH)
-    .setFlexGrow(0)
-    .setFlexShrink(0)
-    .setFlexBasis(-2);
+    .setMinSize(THEME.size.tabMinW, THEME.size.tabMinH);
   tabButton.style({ onControl: function() {
     activeTab = tabId;
     renderApp();
@@ -93,11 +90,6 @@ function buildLayoutTab() {
   const flexRow = HRow("FlexRow", 0, 0)
     .css({
       ...cardBase(),
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "space-between",
-      alignItems: "center",
-      alignContent: "space-around",
       gap: THEME.space.sm,
       rowGap: THEME.space.md,
       columnGap: THEME.space.lg,
@@ -106,27 +98,19 @@ function buildLayoutTab() {
 
   const cellA = Btn({ text: "A" }).setBackground(THEME.colors.accent.a).setColor(THEME.colors.text.primary)
     .setSize(90, 28)
-    .setMargin(THEME.space.xxs)
-    .setFlexGrow(0)
-    .setFlexShrink(0)
-    .setAlignSelf("flex-start");
+    .setMargin(THEME.space.xxs);
 
   const cellB = Btn({ text: "B" }).setBackground(THEME.colors.accent.b).setColor(THEME.colors.text.primary)
     .setSize(110, 28)
-    .setMargin(THEME.space.xxs)
-    .setFlex(1, 1, 120);
+    .setMargin(THEME.space.xxs);
 
   const cellC = Btn({ text: "C" }).setBackground(THEME.colors.accent.c).setColor(THEME.colors.text.primary)
     .setSize(100, 28)
-    .setMargin(THEME.space.xxs)
-    .setAlignSelf("center")
-    .style({ order: 2 });
+    .setMargin(THEME.space.xxs);
 
   const cellD = Btn({ text: "D" }).setBackground(THEME.colors.accent.d).setColor(THEME.colors.text.dark)
     .setSize(90, 28)
-    .setMargin(THEME.space.xxs)
-    .setAlignSelf("stretch")
-    .style({ order: 1 });
+    .setMargin(THEME.space.xxs);
 
   flexRow.add(cellA, cellB, cellC, cellD);
   return [title, flexRow];
@@ -137,8 +121,6 @@ function buildSizingTab() {
   const sizingDemo = HRow("SizingDemo", 0, 0)
     .css({
       ...cardBase(),
-      justifyContent: "flex-start",
-      alignItems: "stretch",
       gap: THEME.space.md
     });
 
@@ -146,23 +128,19 @@ function buildSizingTab() {
     .setColor(THEME.colors.text.primary)
     .setBackground(THEME.colors.bg.input)
     .setSize(180, 30)
-    .setMargin(THEME.space.sm)
-    .setFlexGrow(0)
-    .setFlexShrink(0);
+    .setMargin(THEME.space.sm);
 
   const flexibleCenter = Input({ text: "grow=2 shrink=1 basis=120 min=120 max=420" })
     .setColor(THEME.colors.text.primary)
     .setBackground(THEME.colors.bg.input)
     .setMinSize(120, 30)
     .setMaxSize(420, 30)
-    .setFlex(2, 1, 120)
     .setMargin(THEME.space.sm);
 
   const flexibleRight = Input({ text: "grow=1 shrink=2 basis=90" })
     .setColor(THEME.colors.text.primary)
     .setBackground(THEME.colors.bg.input)
     .setMinSize(90, 30)
-    .setFlex(1, 2, 90)
     .setMargin(THEME.space.sm);
 
   sizingDemo.add(fixedLeft, flexibleCenter, flexibleRight);
@@ -174,7 +152,6 @@ function buildControlsTab() {
   const controls = VBox("Controls", 0, 0)
     .css({
       ...cardBase(),
-      flexDirection: "column",
       gap: THEME.space.sm
     });
 
@@ -226,10 +203,7 @@ function renderApp() {
   const tabBar = HRow("TabBar", 0, 0)
     .css({
       ...cardBase(),
-      flexDirection: "row",
-      gap: THEME.space.sm,
-      justifyContent: "flex-start",
-      alignItems: "center"
+      gap: THEME.space.sm
     })
     .add(
       makeTabButton("Layout", TABS.LAYOUT),
