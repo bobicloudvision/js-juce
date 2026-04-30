@@ -143,6 +143,10 @@ class View {
   setGap(value) { return this.style({ gap: value }); }
   setRowGap(value) { return this.style({ rowGap: value }); }
   setColumnGap(value) { return this.style({ columnGap: value }); }
+  setFontFamily(value) { return this.style({ fontFamily: value }); }
+  setFontFile(value) { return this.style({ fontFile: value }); }
+  setFontSize(value) { return this.style({ fontSize: value }); }
+  setFontWeight(value) { return this.style({ fontWeight: value }); }
   color(value) { return this.style({ color: value }); }
   setColor(value) { return this.color(value); }
   setPosition(x, y) { return this.style({ x, y }); }

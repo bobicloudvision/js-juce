@@ -1,4 +1,5 @@
 #include "JuceRenderer.h"
+#include <map>
 #include <optional>
 
 namespace js_juce
@@ -39,6 +40,137 @@ static std::optional<float> readOptionalNumberProp(const ElementNode& node, cons
     if (value == nullptr)
         return std::nullopt;
     return static_cast<float>(static_cast<double>(*value));
+}
+
+static juce::File resolveFontFile(const juce::String& path)
+{
+    DBG("[js_juce][font] resolve request: " + path);
+
+    juce::File direct(path);
+    if (juce::File::isAbsolutePath(path) && direct.existsAsFile())
+    {
+        DBG("[js_juce][font] resolved absolute: " + direct.getFullPathName());
+        return direct;
+    }
+
+    const auto cwdCandidate = juce::File::getCurrentWorkingDirectory().getChildFile(path);
+    if (cwdCandidate.existsAsFile())
+    {
+        DBG("[js_juce][font] resolved cwd: " + cwdCandidate.getFullPathName());
+        return cwdCandidate;
+    }
+
+    const auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    const auto exeCandidate = exeDir.getChildFile(path);
+    if (exeCandidate.existsAsFile())
+    {
+        DBG("[js_juce][font] resolved exe dir: " + exeCandidate.getFullPathName());
+        return exeCandidate;
+    }
+
+    const auto exeParentCandidate = exeDir.getParentDirectory().getChildFile(path);
+    if (exeParentCandidate.existsAsFile())
+    {
+        DBG("[js_juce][font] resolved exe parent: " + exeParentCandidate.getFullPathName());
+        return exeParentCandidate;
+    }
+
+    DBG("[js_juce][font] resolve failed for: " + path);
+    DBG("[js_juce][font] checked cwd candidate: " + cwdCandidate.getFullPathName());
+    DBG("[js_juce][font] checked exe candidate: " + exeCandidate.getFullPathName());
+    DBG("[js_juce][font] checked exe parent candidate: " + exeParentCandidate.getFullPathName());
+
+    return {};
+}
+
+static juce::Font applyFontProps(const ElementNode& node, juce::Font font)
+{
+    if (const auto fontFile = readOptionalTextProp(node, "fontFile"))
+    {
+        DBG("[js_juce][font] applying fontFile: " + *fontFile);
+        static std::map<juce::String, juce::Typeface::Ptr> loadedTypefaces;
+        auto it = loadedTypefaces.find(*fontFile);
+        if (it == loadedTypefaces.end())
+        {
+            const auto file = resolveFontFile(*fontFile);
+            if (file.existsAsFile())
+            {
+                DBG("[js_juce][font] loading file: " + file.getFullPathName());
+                juce::MemoryBlock data;
+                if (file.loadFileAsData(data))
+                {
+                    DBG("[js_juce][font] file loaded bytes: " + juce::String(static_cast<int>(data.getSize())));
+                    if (auto typeface = juce::Typeface::createSystemTypefaceFor(data.getData(), data.getSize()))
+                    {
+                        DBG("[js_juce][font] typeface created: " + typeface->getName() + " / " + typeface->getStyle());
+                        it = loadedTypefaces.emplace(*fontFile, std::move(typeface)).first;
+                    }
+                    else
+                    {
+                        DBG("[js_juce][font] ERROR: createSystemTypefaceFor failed for file: " + file.getFullPathName());
+                    }
+                }
+                else
+                {
+                    DBG("[js_juce][font] ERROR: loadFileAsData failed for file: " + file.getFullPathName());
+                }
+            }
+            else
+            {
+                DBG("[js_juce][font] ERROR: resolved file does not exist for path: " + *fontFile);
+            }
+        }
+        else
+        {
+            DBG("[js_juce][font] cache hit for fontFile: " + *fontFile);
+        }
+
+        if (it != loadedTypefaces.end() && it->second != nullptr)
+        {
+            const auto previousHeight = font.getHeight();
+            font = juce::Font(it->second);
+            font.setHeight(previousHeight);
+            DBG("[js_juce][font] applied typeface from file: " + it->second->getName());
+        }
+        else
+        {
+            DBG("[js_juce][font] WARNING: no loaded typeface available for: " + *fontFile);
+        }
+    }
+
+    if (const auto family = readOptionalTextProp(node, "fontFamily"))
+    {
+        const auto currentName = font.getTypefaceName();
+        if (currentName != *family)
+        {
+            font.setTypefaceName(*family);
+            DBG("[js_juce][font] applied fontFamily: " + *family);
+        }
+        else
+        {
+            DBG("[js_juce][font] skipped fontFamily override (already applied): " + *family);
+        }
+    }
+
+    if (const auto size = readOptionalNumberProp(node, "fontSize"))
+    {
+        font.setHeight(*size);
+        DBG("[js_juce][font] applied fontSize: " + juce::String(*size));
+    }
+
+    if (const auto weight = readOptionalTextProp(node, "fontWeight"))
+    {
+        const auto normalized = weight->toLowerCase();
+        const bool isBold = normalized == "bold"
+                            || normalized == "600"
+                            || normalized == "700"
+                            || normalized == "800"
+                            || normalized == "900";
+        font.setBold(isBold);
+        DBG("[js_juce][font] applied fontWeight: " + *weight + " (bold=" + juce::String(isBold ? "true" : "false") + ")");
+    }
+
+    return font;
 }
 
 static juce::FlexBox::Direction parseDirection(const juce::String& value, bool defaultRow)
@@ -260,6 +392,12 @@ public:
         repaint();
     }
 
+    void setTextFont(juce::Font fontToUse)
+    {
+        textFont = std::move(fontToUse);
+        repaint();
+    }
+
     void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
     {
         auto baseColour = findColour(juce::TextButton::buttonColourId);
@@ -272,7 +410,7 @@ public:
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 4.0f);
 
         g.setColour(findColour(juce::TextButton::textColourOffId));
-        g.setFont(juce::Font(14.0f));
+        g.setFont(textFont);
         g.drawFittedText(getButtonText(), getLocalBounds().reduced(6, 2), juce::Justification::centred, 1);
 
         if (borderColour.has_value() && borderWidth > 0.0f)
@@ -287,6 +425,7 @@ public:
 private:
     std::optional<juce::Colour> borderColour;
     float borderWidth = 0.0f;
+    juce::Font textFont { juce::FontOptions(14.0f) };
 };
 
 static juce::var readVarProp(const ElementNode& node, const juce::String& name)
@@ -341,6 +480,7 @@ static std::unique_ptr<juce::Component> buildComponent(
         auto label = std::make_unique<juce::Label>();
         label->setText(readTextProp(node, "text"), juce::dontSendNotification);
         label->setJustificationType(juce::Justification::centredLeft);
+        label->setFont(applyFontProps(node, label->getFont()));
         if (const auto colour = readColourProp(node, "color"))
             label->setColour(juce::Label::textColourId, *colour);
         if (const auto colour = readColourProp(node, "background"))
@@ -369,6 +509,7 @@ static std::unique_ptr<juce::Component> buildComponent(
         }
         if (const auto colour = readColourProp(node, "background"))
             button->setColour(juce::TextButton::buttonColourId, *colour);
+        button->setTextFont(applyFontProps(node, juce::Font(juce::FontOptions(14.0f))));
         button->setBorderStyle(readColourProp(node, "borderColor"),
                                static_cast<float>(readNumberProp(node, "borderWidth", 0.0)));
         return button;
@@ -394,6 +535,7 @@ static std::unique_ptr<juce::Component> buildComponent(
     {
         auto editor = std::make_unique<juce::TextEditor>();
         editor->setText(readTextProp(node, "text"));
+        editor->applyFontToAllText(applyFontProps(node, editor->getFont()));
         const auto callbackId = readCallbackId(node);
         if (callbackId.isNotEmpty() && onControl != nullptr)
         {

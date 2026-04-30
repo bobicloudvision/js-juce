@@ -8,32 +8,32 @@ const Range = JSJuce.Slider;
 const THEME = {
   colors: {
     bg: {
-      appFrom: "#0f1422",
-      appTo: "#231734",
-      header: "#151b2c",
-      surface: "#171f33",
-      input: "#243252"
+      appFrom: "#111318",
+      appTo: "#161a22",
+      header: "#1a1f28",
+      surface: "#202632",
+      input: "#252d3a"
     },
     text: {
-      primary: "#ffffff",
-      muted: "#c7d2ff",
-      title: "#7df9ff",
-      section: "#9bc2ff",
-      accent: "#8caeff",
+      primary: "#f3f6fb",
+      muted: "#aeb8c8",
+      title: "#dbe7ff",
+      section: "#c5d5f2",
+      accent: "#9db4d8",
       dark: "#111111"
     },
     tab: {
-      active: "#3478f6",
-      inactive: "#25314f"
+      active: "#3f5f8f",
+      inactive: "#2b3443"
     },
     accent: {
-      a: "#2962ff",
-      b: "#7c4dff",
-      c: "#ff4081",
-      d: "#00bfa5",
-      play: "#2452b5",
-      stop: "#6f2fa3",
-      record: "#9a2d45"
+      a: "#4c6488",
+      b: "#506688",
+      c: "#556b8e",
+      d: "#5b7194",
+      play: "#4d6386",
+      stop: "#586d8f",
+      record: "#4a607f"
     }
   },
   space: {
@@ -60,7 +60,8 @@ const THEME = {
 const TABS = {
   LAYOUT: "layout",
   SIZING: "sizing",
-  CONTROLS: "controls"
+  CONTROLS: "controls",
+  TYPOGRAPHY: "typography"
 };
 
 let activeTab = TABS.LAYOUT;
@@ -183,9 +184,68 @@ function buildControlsTab() {
   return [title, controls];
 }
 
+function buildTypographyTab() {
+  const title = Txt("Typography: custom font rendering (Outfit)").setColor(THEME.colors.text.section);
+  const typography = VBox("Typography", 0, 0)
+    .css({
+      ...cardBase(),
+      gap: THEME.space.sm
+    });
+
+  const outfitFamily = "Outfit";
+  const outfitFile = "examples/playground/assets/fonts/Outfit[wght].ttf";
+
+  const display = Txt("Outfit 24 / Bold").setColor(THEME.colors.text.title)
+    .setFontFile(outfitFile)
+    .setFontFamily(outfitFamily)
+    .setFontSize(24)
+    .setFontWeight("700");
+
+  const heading = Txt("Outfit 18 / Semibold").setColor(THEME.colors.text.section)
+    .setFontFile(outfitFile)
+    .setFontFamily(outfitFamily)
+    .setFontSize(18)
+    .setFontWeight("600");
+
+  const body = Txt("The quick brown fox jumps over the lazy dog 1234567890")
+    .setColor(THEME.colors.text.primary)
+    .setFontFile(outfitFile)
+    .setFontFamily(outfitFamily)
+    .setFontSize(14)
+    .setFontWeight("400");
+
+  const note = Txt("If Outfit is not installed, JUCE will fall back automatically.")
+    .setColor(THEME.colors.text.muted)
+    .setFontFile(outfitFile)
+    .setFontFamily(outfitFamily)
+    .setFontSize(12)
+    .setFontWeight("400");
+
+  const input = Input({ text: "Typing sample in Outfit" })
+    .setBackground(THEME.colors.bg.input)
+    .setColor(THEME.colors.text.primary)
+    .setFontFile(outfitFile)
+    .setFontFamily(outfitFamily)
+    .setFontSize(14)
+    .setFontWeight("400");
+
+  const action = Btn("Outfit Button", 0, 0).css({
+    backgroundColor: THEME.colors.accent.play,
+    color: THEME.colors.text.primary
+  })
+    .setFontFile(outfitFile)
+    .setFontFamily(outfitFamily)
+    .setFontSize(14)
+    .setFontWeight("600");
+
+  typography.add(display, heading, body, note, input, action);
+  return [title, typography];
+}
+
 function buildTabContent() {
   if (activeTab === TABS.SIZING) return buildSizingTab();
   if (activeTab === TABS.CONTROLS) return buildControlsTab();
+  if (activeTab === TABS.TYPOGRAPHY) return buildTypographyTab();
   return buildLayoutTab();
 }
 
@@ -208,7 +268,8 @@ function renderApp() {
     .add(
       makeTabButton("Layout", TABS.LAYOUT),
       makeTabButton("Sizing", TABS.SIZING),
-      makeTabButton("Controls", TABS.CONTROLS)
+      makeTabButton("Controls", TABS.CONTROLS),
+      makeTabButton("Typography", TABS.TYPOGRAPHY)
     );
 
   const content = buildTabContent();
