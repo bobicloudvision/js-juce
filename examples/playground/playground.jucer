@@ -11,6 +11,7 @@
     </GROUP>
   </MAINGROUP>
   <MODULES>
+    <MODULE id="js_juce" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
     <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_events" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
@@ -30,6 +31,7 @@
         <MODULEPATH id="juce_events" path="../../../../../../Applications/JUCE/modules"/>
         <MODULEPATH id="juce_graphics" path="../../../../../../Applications/JUCE/modules"/>
         <MODULEPATH id="juce_gui_basics" path="../../../../../../Applications/JUCE/modules"/>
+        <MODULEPATH id="js_juce" path="../.."/>
       </MODULEPATHS>
     </XCODE_MAC>
   </EXPORTFORMATS>

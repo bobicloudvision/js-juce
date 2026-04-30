@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <js_juce/js_juce.h>
 
 //==============================================================================
 /*
@@ -19,9 +20,8 @@ public:
     void resized() override;
 
 private:
-    //==============================================================================
-    // Your private member variables go here...
-
+    js_juce::JsBridge bridge;
+    juce::String statusMessage;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

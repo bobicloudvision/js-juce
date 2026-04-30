@@ -13,6 +13,7 @@
 #pragma once
 
 
+#include <js_juce/js_juce.h>
 #include <juce_core/juce_core.h>
 #include <juce_data_structures/juce_data_structures.h>
 #include <juce_events/juce_events.h>
