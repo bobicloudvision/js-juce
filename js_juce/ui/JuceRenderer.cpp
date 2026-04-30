@@ -919,24 +919,43 @@ public:
         repaint();
     }
 
+    void setHoverStyle(std::optional<juce::Colour> background,
+                       std::optional<juce::Colour> text,
+                       std::optional<juce::Colour> border)
+    {
+        hoverBackgroundColour = background;
+        hoverTextColour = text;
+        hoverBorderColour = border;
+        repaint();
+    }
+
     void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
     {
         auto baseColour = findColour(juce::TextButton::buttonColourId);
         if (shouldDrawButtonAsDown)
             baseColour = baseColour.brighter(0.12f);
+        else if (shouldDrawButtonAsHighlighted && hoverBackgroundColour.has_value())
+            baseColour = *hoverBackgroundColour;
         else if (shouldDrawButtonAsHighlighted)
             baseColour = baseColour.brighter(0.06f);
 
         g.setColour(baseColour);
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 4.0f);
 
-        g.setColour(findColour(juce::TextButton::textColourOffId));
+        auto textColour = findColour(juce::TextButton::textColourOffId);
+        if (shouldDrawButtonAsHighlighted && hoverTextColour.has_value())
+            textColour = *hoverTextColour;
+        g.setColour(textColour);
         g.setFont(textFont);
         g.drawFittedText(getButtonText(), getLocalBounds().reduced(6, 2), textJustification, 1);
 
-        if (borderColour.has_value() && borderWidth > 0.0f)
+        auto resolvedBorderColour = borderColour;
+        if (shouldDrawButtonAsHighlighted && hoverBorderColour.has_value())
+            resolvedBorderColour = hoverBorderColour;
+
+        if (resolvedBorderColour.has_value() && borderWidth > 0.0f)
         {
-            g.setColour(*borderColour);
+            g.setColour(*resolvedBorderColour);
             g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(borderWidth * 0.5f),
                                    borderWidth,
                                    4.0f);
@@ -945,6 +964,9 @@ public:
 
 private:
     std::optional<juce::Colour> borderColour;
+    std::optional<juce::Colour> hoverBackgroundColour;
+    std::optional<juce::Colour> hoverTextColour;
+    std::optional<juce::Colour> hoverBorderColour;
     float borderWidth = 0.0f;
     juce::Font textFont { juce::FontOptions(14.0f) };
     juce::Justification textJustification { juce::Justification::centred };
@@ -1083,6 +1105,9 @@ static std::unique_ptr<juce::Component> buildComponent(
         button->setTextJustification(parseTextAlign(readTextProp(node, "textAlign")));
         button->setBorderStyle(readColourProp(node, "borderColor"),
                                static_cast<float>(readNumberProp(node, "borderWidth", 0.0)));
+        button->setHoverStyle(readColourProp(node, "hoverBackground"),
+                              readColourProp(node, "hoverColor"),
+                              readColourProp(node, "hoverBorderColor"));
         return button;
     }
 
