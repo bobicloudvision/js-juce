@@ -5,6 +5,14 @@ const VBox = JSJuce.Column;
 const Input = JSJuce.TextInput;
 const Range = JSJuce.Slider;
 
+const MyFont = JSJuce.Font({
+  fontFile: "examples/playground/assets/fonts/Outfit[wght].ttf",
+  fontFamily: "Outfit",
+  fontSize: 14,
+  fontWeight: "400"
+});
+JuceUI.setGlobalStyle(MyFont);
+
 const THEME = {
   colors: {
     bg: {
@@ -192,40 +200,27 @@ function buildTypographyTab() {
       gap: THEME.space.sm
     });
 
-  const outfitFamily = "Outfit";
-  const outfitFile = "examples/playground/assets/fonts/Outfit[wght].ttf";
-
   const display = Txt("Outfit 24 / Bold").setColor(THEME.colors.text.title)
-    .setFontFile(outfitFile)
-    .setFontFamily(outfitFamily)
     .setFontSize(24)
     .setFontWeight("700");
 
   const heading = Txt("Outfit 18 / Semibold").setColor(THEME.colors.text.section)
-    .setFontFile(outfitFile)
-    .setFontFamily(outfitFamily)
     .setFontSize(18)
     .setFontWeight("600");
 
   const body = Txt("The quick brown fox jumps over the lazy dog 1234567890")
     .setColor(THEME.colors.text.primary)
-    .setFontFile(outfitFile)
-    .setFontFamily(outfitFamily)
     .setFontSize(14)
     .setFontWeight("400");
 
   const note = Txt("If Outfit is not installed, JUCE will fall back automatically.")
     .setColor(THEME.colors.text.muted)
-    .setFontFile(outfitFile)
-    .setFontFamily(outfitFamily)
     .setFontSize(12)
     .setFontWeight("400");
 
   const input = Input({ text: "Typing sample in Outfit" })
     .setBackground(THEME.colors.bg.input)
     .setColor(THEME.colors.text.primary)
-    .setFontFile(outfitFile)
-    .setFontFamily(outfitFamily)
     .setFontSize(14)
     .setFontWeight("400");
 
@@ -233,8 +228,6 @@ function buildTypographyTab() {
     backgroundColor: THEME.colors.accent.play,
     color: THEME.colors.text.primary
   })
-    .setFontFile(outfitFile)
-    .setFontFamily(outfitFamily)
     .setFontSize(14)
     .setFontWeight("600");
 

@@ -1,4 +1,5 @@
 const __jsJuceStyleContextStack = [Object.create(null)];
+let __jsJuceGlobalStyle = {};
 
 function __jsJuceCurrentStyleContext() {
   return __jsJuceStyleContextStack[__jsJuceStyleContextStack.length - 1];
@@ -58,6 +59,13 @@ function __jsJuceNormalizeStyleProps(props) {
   return merged;
 }
 
+function __jsJuceMergeGlobalStyle(nodeProps) {
+  if (!__jsJuceGlobalStyle || typeof __jsJuceGlobalStyle !== "object")
+    return nodeProps || {};
+
+  return { ...__jsJuceGlobalStyle, ...(nodeProps || {}) };
+}
+
 let __jsJuceNextCallbackId = 1;
 const __jsJuceControlCallbacks = Object.create(null);
 
@@ -93,7 +101,9 @@ function __jsJuceNormalizeNode(node) {
   const children = __jsJuceFlattenChildren(rawChildren).map(__jsJuceNormalizeNode);
   return __jsJuceCreateElement(
     node.type || "View",
-    __jsJuceWrapFunctionsForTransport(__jsJuceNormalizeStyleProps(node.props || {})),
+    __jsJuceWrapFunctionsForTransport(
+      __jsJuceMergeGlobalStyle(__jsJuceNormalizeStyleProps(node.props || {}))
+    ),
     ...children
   );
 }
@@ -215,6 +225,19 @@ const button = (value, props) => new Button(value, props);
 const slider = (props) => new Slider(props);
 const textInput = (props) => new TextInput(props);
 
+function createFontPreset(fontProps = {}) {
+  const normalized = __jsJuceNormalizeStyleProps(fontProps || {});
+  const preset = {
+    ...normalized,
+    applyTo(target) {
+      if (target && typeof target.style === "function")
+        target.style(normalized);
+      return target;
+    }
+  };
+  return preset;
+}
+
 globalThis.JuceUI = {
   createElement: function(type, props, ...children) {
     return h(type, props, ...children);
@@ -235,6 +258,12 @@ globalThis.JuceUI = {
     } finally {
       __jsJuceStyleContextStack.pop();
     }
+  },
+  setGlobalStyle: function(styleObject) {
+    __jsJuceGlobalStyle = __jsJuceNormalizeStyleProps(styleObject || {});
+  },
+  getGlobalStyle: function() {
+    return { ...__jsJuceGlobalStyle };
   }
 };
 
@@ -251,7 +280,8 @@ globalThis.JSJuce = {
   Text: (nameOrText, x, y) => new Text(nameOrText, { x, y }),
   Button: (nameOrText, x, y) => new Button(nameOrText, { x, y }),
   Slider: (nameOrProps, x, y) => new Slider({ name: nameOrProps, x, y }),
-  TextInput: (nameOrProps, x, y) => new TextInput({ name: nameOrProps, x, y })
+  TextInput: (nameOrProps, x, y) => new TextInput({ name: nameOrProps, x, y }),
+  Font: (fontProps = {}) => createFontPreset(fontProps)
 };
 
 globalThis.View = View;
