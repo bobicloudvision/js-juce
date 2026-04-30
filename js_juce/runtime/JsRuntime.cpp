@@ -97,6 +97,18 @@ bool JsRuntime::initialise()
                       JS_NewCFunction(impl->context, Impl::jsRender, "__jsJuceRender", 1));
 
     const char* bootstrap = R"(
+const __jsJuceStyleContextStack = [Object.create(null)];
+
+function __jsJuceCurrentStyleContext() {
+  return __jsJuceStyleContextStack[__jsJuceStyleContextStack.length - 1];
+}
+
+function __jsJuceResolveContextStyle(typeName, ownProps) {
+  const scope = __jsJuceCurrentStyleContext();
+  const defaults = (scope && scope[typeName]) || {};
+  return { ...defaults, ...(ownProps || {}) };
+}
+
 function __jsJuceNormalizeNode(node) {
   if (node == null) {
     return __jsJuceCreateElement("View", {});
@@ -116,10 +128,21 @@ function __jsJuceNormalizeNode(node) {
 
 class View {
   constructor(props = {}, children = []) {
-    this.props = props || {};
+    this.props = __jsJuceResolveContextStyle(this.type(), props || {});
     this.children = Array.isArray(children) ? children : [children];
   }
   type() { return "View"; }
+  style(nextProps = {}) {
+    this.props = { ...this.props, ...nextProps };
+    return this;
+  }
+  background(value) { return this.style({ background: value }); }
+  border(color, width = 1) { return this.style({ borderColor: color, borderWidth: width }); }
+  color(value) { return this.style({ color: value }); }
+  add(...children) {
+    this.children.push(...children);
+    return this;
+  }
   toElement() { return __jsJuceCreateElement(this.type(), this.props, ...this.children.map(__jsJuceNormalizeNode)); }
 }
 
@@ -152,6 +175,19 @@ globalThis.JuceUI = {
   },
   render: function(tree) {
     __jsJuceRender(__jsJuceNormalizeNode(tree));
+  },
+  withStyleContext: function(contextObject, buildFn) {
+    const parent = __jsJuceCurrentStyleContext();
+    const merged = Object.create(parent || null);
+    for (const k of Object.keys(contextObject || {}))
+      merged[k] = { ...(parent && parent[k] ? parent[k] : {}), ...(contextObject[k] || {}) };
+
+    __jsJuceStyleContextStack.push(merged);
+    try {
+      return buildFn();
+    } finally {
+      __jsJuceStyleContextStack.pop();
+    }
   }
 };
 
