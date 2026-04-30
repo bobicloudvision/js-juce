@@ -16,8 +16,6 @@ let activeTab = TABS.LAYOUT;
 function cardBase() {
   return {
     backgroundColor: "#171f33",
-    borderColor: "#3f5797",
-    borderWidth: 1,
     padding: 8
   };
 }
@@ -57,25 +55,25 @@ function buildLayoutTab() {
       minHeight: 90
     });
 
-  const cellA = Btn("A", 0, 0).setBackground("#2962ff").setColor("#fff")
+  const cellA = Btn({ text: "A" }).setBackground("#2962ff").setColor("#fff")
     .setSize(90, 28)
     .setMargin(2)
     .setFlexGrow(0)
     .setFlexShrink(0)
     .setAlignSelf("flex-start");
 
-  const cellB = Btn("B", 0, 0).setBackground("#7c4dff").setColor("#fff")
+  const cellB = Btn({ text: "B" }).setBackground("#7c4dff").setColor("#fff")
     .setSize(110, 28)
     .setMargin(2)
     .setFlex(1, 1, 120);
 
-  const cellC = Btn("C", 0, 0).setBackground("#ff4081").setColor("#fff")
+  const cellC = Btn({ text: "C" }).setBackground("#ff4081").setColor("#fff")
     .setSize(100, 28)
     .setMargin(2)
     .setAlignSelf("center")
     .style({ order: 2 });
 
-  const cellD = Btn("D", 0, 0).setBackground("#00bfa5").setColor("#111")
+  const cellD = Btn({ text: "D" }).setBackground("#00bfa5").setColor("#111")
     .setSize(90, 28)
     .setMargin(2)
     .setAlignSelf("stretch")
@@ -98,7 +96,6 @@ function buildSizingTab() {
   const fixedLeft = Input({ text: "Fixed width=180, margin=6" })
     .setColor("#fff")
     .setBackground("#243252")
-    .setBorder("#5a78c3", 1)
     .setSize(180, 30)
     .setMargin(6)
     .setFlexGrow(0)
@@ -107,7 +104,6 @@ function buildSizingTab() {
   const flexibleCenter = Input({ text: "grow=2 shrink=1 basis=120 min=120 max=420" })
     .setColor("#fff")
     .setBackground("#243252")
-    .setBorder("#5a78c3", 1)
     .setMinSize(120, 30)
     .setMaxSize(420, 30)
     .setFlex(2, 1, 120)
@@ -116,7 +112,6 @@ function buildSizingTab() {
   const flexibleRight = Input({ text: "grow=1 shrink=2 basis=90" })
     .setColor("#fff")
     .setBackground("#243252")
-    .setBorder("#5a78c3", 1)
     .setMinSize(90, 30)
     .setFlex(1, 2, 90)
     .setMargin(6);
@@ -174,7 +169,6 @@ function renderApp() {
 
   const header = VBox("Header", 0, 0)
     .setBackground("#151b2c")
-    .setBorder("#334268", 1)
     .setPadding(8)
     .setGap(3)
     .add(title, subtitle);
@@ -198,12 +192,7 @@ function renderApp() {
 
   const root = VBox("Root", 0, 0)
     .setGradient("#0f1422", "#231734", true)
-    .setBorder("#334268", 1)
     .setPadding(10)
-    .setGap(10)
-    .setDirection("column")
-    .setJustify("flex-start")
-    .setAlignItems("stretch")
     .add(header, tabBarTitle, tabBar, ...content);
 
   JuceUI.render(root);

@@ -248,6 +248,47 @@ public:
     juce::String alignContent = "stretch";
 };
 
+class StyledTextButton final : public juce::TextButton
+{
+public:
+    explicit StyledTextButton(const juce::String& buttonText) : juce::TextButton(buttonText) {}
+
+    void setBorderStyle(std::optional<juce::Colour> colour, float width)
+    {
+        borderColour = colour;
+        borderWidth = juce::jmax(0.0f, width);
+        repaint();
+    }
+
+    void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
+    {
+        auto baseColour = findColour(juce::TextButton::buttonColourId);
+        if (shouldDrawButtonAsDown)
+            baseColour = baseColour.brighter(0.12f);
+        else if (shouldDrawButtonAsHighlighted)
+            baseColour = baseColour.brighter(0.06f);
+
+        g.setColour(baseColour);
+        g.fillRoundedRectangle(getLocalBounds().toFloat(), 4.0f);
+
+        g.setColour(findColour(juce::TextButton::textColourOffId));
+        g.setFont(juce::Font(14.0f));
+        g.drawFittedText(getButtonText(), getLocalBounds().reduced(6, 2), juce::Justification::centred, 1);
+
+        if (borderColour.has_value() && borderWidth > 0.0f)
+        {
+            g.setColour(*borderColour);
+            g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(borderWidth * 0.5f),
+                                   borderWidth,
+                                   4.0f);
+        }
+    }
+
+private:
+    std::optional<juce::Colour> borderColour;
+    float borderWidth = 0.0f;
+};
+
 static juce::var readVarProp(const ElementNode& node, const juce::String& name)
 {
     const auto* value = node.props.getVarPointer(name);
@@ -311,7 +352,8 @@ static std::unique_ptr<juce::Component> buildComponent(
 
     if (node.type == "Button")
     {
-        auto button = std::make_unique<juce::TextButton>(readTextProp(node, "text"));
+        auto button = std::make_unique<StyledTextButton>(readTextProp(node, "text"));
+        button->setButtonText(readTextProp(node, "text"));
         const auto callbackId = readCallbackId(node);
         if (callbackId.isNotEmpty() && onControl != nullptr)
         {
@@ -327,6 +369,8 @@ static std::unique_ptr<juce::Component> buildComponent(
         }
         if (const auto colour = readColourProp(node, "background"))
             button->setColour(juce::TextButton::buttonColourId, *colour);
+        button->setBorderStyle(readColourProp(node, "borderColor"),
+                               static_cast<float>(readNumberProp(node, "borderWidth", 0.0)));
         return button;
     }
 
