@@ -973,6 +973,42 @@ static std::optional<juce::Colour> readColourProp(const ElementNode& node, const
     if (text.isEmpty())
         return std::nullopt;
 
+    const auto lower = text.toLowerCase();
+    if (lower.startsWith("rgba(") || lower.startsWith("rgb("))
+    {
+        const bool hasAlpha = lower.startsWith("rgba(");
+        const int openIdx = text.indexOfChar('(');
+        const int closeIdx = text.lastIndexOfChar(')');
+        if (openIdx > 0 && closeIdx > openIdx)
+        {
+            const auto inside = text.substring(openIdx + 1, closeIdx);
+            juce::StringArray parts;
+            parts.addTokens(inside, ",", "");
+            parts.trim();
+            parts.removeEmptyStrings();
+
+            if ((hasAlpha && parts.size() == 4) || (!hasAlpha && parts.size() == 3))
+            {
+                const auto r = juce::jlimit(0, 255, parts[0].getIntValue());
+                const auto g = juce::jlimit(0, 255, parts[1].getIntValue());
+                const auto b = juce::jlimit(0, 255, parts[2].getIntValue());
+                juce::uint8 alpha = 255;
+
+                if (hasAlpha)
+                {
+                    const auto aRaw = static_cast<float>(parts[3].getDoubleValue());
+                    const auto aNorm = juce::jlimit(0.0f, 1.0f, aRaw);
+                    alpha = static_cast<juce::uint8>(juce::roundToInt(aNorm * 255.0f));
+                }
+
+                return juce::Colour(static_cast<juce::uint8>(r),
+                                    static_cast<juce::uint8>(g),
+                                    static_cast<juce::uint8>(b),
+                                    alpha);
+            }
+        }
+    }
+
     if (text.startsWith("#"))
     {
         auto hex = text.substring(1);
