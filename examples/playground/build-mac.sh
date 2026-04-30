@@ -10,6 +10,7 @@ XCODEPROJ="${XCODEPROJ:-$PROJECT_DIR/Builds/MacOSX/playground.xcodeproj}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 SCHEME="${SCHEME:-playground - App}"
 DERIVED_DATA="${DERIVED_DATA:-$PROJECT_DIR/Builds/DerivedData}"
+QUICKJS_CFLAGS="${QUICKJS_CFLAGS:--D_GNU_SOURCE=1 -Dasm=__asm__ -DCONFIG_VERSION=\\\"2025-09-13\\\"}"
 
 if [[ ! -d "$XCODEPROJ" ]]; then
   echo "Missing Xcode project: $XCODEPROJ"
@@ -26,12 +27,15 @@ echo "Project       : $XCODEPROJ"
 echo "Scheme        : $SCHEME"
 echo "Configuration : $CONFIGURATION"
 echo "DerivedData   : $DERIVED_DATA"
+echo "QuickJS flags : $QUICKJS_CFLAGS"
 
 xcodebuild \
   -project "$XCODEPROJ" \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
   -derivedDataPath "$DERIVED_DATA" \
+  "OTHER_CFLAGS=\$(inherited) $QUICKJS_CFLAGS" \
+  "OTHER_CPLUSPLUSFLAGS=\$(inherited) $QUICKJS_CFLAGS" \
   build
 
 echo "Playground build completed."
