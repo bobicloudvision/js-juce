@@ -121,7 +121,7 @@ struct ChildLayoutStyle
     float maxWidth = -1.0f;
     float minHeight = 0.0f;
     float maxHeight = -1.0f;
-    float flexGrow = 1.0f;
+    float flexGrow = 0.0f;
     float flexShrink = 1.0f;
     float flexBasis = -2.0f;
     int order = 0;
@@ -512,7 +512,7 @@ static ChildLayoutStyle readChildLayoutStyle(const ElementNode& node)
     style.maxWidth = readOptionalNumberProp(node, "maxWidth").value_or(-1.0f);
     style.minHeight = readOptionalNumberProp(node, "minHeight").value_or(0.0f);
     style.maxHeight = readOptionalNumberProp(node, "maxHeight").value_or(-1.0f);
-    style.flexGrow = readOptionalNumberProp(node, "grow").value_or(1.0f);
+    style.flexGrow = readOptionalNumberProp(node, "grow").value_or(0.0f);
     style.flexShrink = readOptionalNumberProp(node, "shrink").value_or(1.0f);
     style.flexBasis = readOptionalNumberProp(node, "basis").value_or(-2.0f);
     style.order = static_cast<int>(readOptionalNumberProp(node, "order").value_or(0.0f));
@@ -536,6 +536,44 @@ static ChildLayoutStyle readChildLayoutStyle(const ElementNode& node)
     style.margin.right = readEdgeValue(node, "margin", "marginRight", 0.0f);
     style.margin.top = readEdgeValue(node, "margin", "marginTop", 0.0f);
     style.margin.bottom = readEdgeValue(node, "margin", "marginBottom", 0.0f);
+
+    // Intrinsic minimums for leaf controls when no explicit size is provided.
+    // This prevents common JSX cases (e.g. <text>Title</text>) from collapsing.
+    if (style.minWidth <= 0.0f && style.minHeight <= 0.0f)
+    {
+        if (node.type == "Text")
+        {
+            const auto text = readOptionalTextProp(node, "text").value_or(juce::String());
+            auto font = applyFontProps(node, juce::Font(juce::FontOptions(14.0f)));
+            const auto w = juce::jmax(8.0f, font.getStringWidthFloat(text) + 6.0f);
+            const auto h = juce::jmax(14.0f, font.getHeight() + 4.0f);
+            style.minWidth = juce::jmax(style.minWidth, w);
+            style.minHeight = juce::jmax(style.minHeight, h);
+        }
+        else if (node.type == "Button")
+        {
+            const auto text = readOptionalTextProp(node, "text").value_or(juce::String());
+            auto font = applyFontProps(node, juce::Font(juce::FontOptions(14.0f)));
+            const auto w = juce::jmax(56.0f, font.getStringWidthFloat(text) + 24.0f);
+            const auto h = juce::jmax(24.0f, font.getHeight() + 10.0f);
+            style.minWidth = juce::jmax(style.minWidth, w);
+            style.minHeight = juce::jmax(style.minHeight, h);
+        }
+        else if (node.type == "TextInput")
+        {
+            const auto text = readOptionalTextProp(node, "text").value_or(juce::String());
+            auto font = applyFontProps(node, juce::Font(juce::FontOptions(14.0f)));
+            const auto w = juce::jmax(80.0f, font.getStringWidthFloat(text) + 20.0f);
+            const auto h = juce::jmax(24.0f, font.getHeight() + 10.0f);
+            style.minWidth = juce::jmax(style.minWidth, w);
+            style.minHeight = juce::jmax(style.minHeight, h);
+        }
+        else if (node.type == "Slider")
+        {
+            style.minWidth = juce::jmax(style.minWidth, 120.0f);
+            style.minHeight = juce::jmax(style.minHeight, 24.0f);
+        }
+    }
 
     return style;
 }
@@ -656,6 +694,14 @@ public:
             item.order = s.order;
             item.alignSelf = s.alignSelf;
             item.margin = s.margin;
+
+            // JUCE FlexItem does not infer intrinsic content width for our custom
+            // container components (View/Row/Column). If a container child has no
+            // explicit width/basis and grow=0, it can collapse to zero width.
+            // Keep these visible by allowing them to participate in row growth.
+            if (item.width < 0.0f && item.flexBasis < 0.0f && item.flexGrow == 0.0f)
+                if (dynamic_cast<ViewComponent*>(c) != nullptr)
+                    item.flexGrow = 1.0f;
 
             if (gap > 0.0f || rowGap > 0.0f || columnGap > 0.0f)
             {

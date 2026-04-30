@@ -2,3 +2,6 @@
 /examples/playground/Builds/MacOSX
 /examples/playground/Builds
 /examples/playground/jsx-tooling/node_modules
+/build/CMakeFiles
+/build/juce/tools/CMakeFiles
+/build/juce/tools/extras/Build

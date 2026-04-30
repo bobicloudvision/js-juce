@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
+include(CTest)
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ext/juce/CMakeLists.txt")
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/ext/juce" "${CMAKE_BINARY_DIR}/juce")
@@ -50,3 +51,33 @@ target_link_libraries(js_juce_host
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+if(BUILD_TESTING)
+    juce_add_console_app(js_juce_tests
+        PRODUCT_NAME "js_juce_tests"
+    )
+
+    target_sources(js_juce_tests
+        PRIVATE
+            tests/RunUnitTests.cpp
+    )
+
+    target_compile_definitions(js_juce_tests
+        PRIVATE
+            JUCE_UNIT_TESTS=1
+    )
+
+    target_link_libraries(js_juce_tests
+        PRIVATE
+            js_juce
+            js_juce_quickjs
+            juce::juce_core
+            juce::juce_events
+            juce::juce_gui_basics
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_lto_flags
+            juce::juce_recommended_warning_flags
+    )
+
+    add_test(NAME js_juce_bridge_tests COMMAND js_juce_tests)
+endif()
