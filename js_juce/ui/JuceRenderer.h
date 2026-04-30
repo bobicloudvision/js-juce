@@ -11,6 +11,10 @@ public:
     JuceRenderer() = default;
     ~JuceRenderer() = default;
 
+    void setControlCallback(std::function<void(const juce::String&, const juce::var&)> callback);
     void renderTo(juce::Component& target, const ElementNode& root);
+
+private:
+    std::function<void(const juce::String&, const juce::var&)> onControl;
 };
 }

@@ -41,10 +41,15 @@ public:
     float borderWidth = 0.0f;
 };
 
-static juce::String readTextProp(const ElementNode& node, const juce::String& name)
+static juce::var readVarProp(const ElementNode& node, const juce::String& name)
 {
     const auto* value = node.props.getVarPointer(name);
-    return value != nullptr ? value->toString() : juce::String();
+    return value != nullptr ? *value : juce::var();
+}
+
+static juce::String readTextProp(const ElementNode& node, const juce::String& name)
+{
+    return readVarProp(node, name).toString();
 }
 
 static double readNumberProp(const ElementNode& node, const juce::String& name, double fallbackValue = 0.0)
@@ -71,7 +76,17 @@ static std::optional<juce::Colour> readColourProp(const ElementNode& node, const
     return juce::Colours::findColourForName(text, juce::Colours::transparentBlack);
 }
 
-static std::unique_ptr<juce::Component> buildComponent(const ElementNode& node)
+static juce::String readCallbackId(const ElementNode& node)
+{
+    const auto callbackVar = readVarProp(node, "onControl");
+    if (const auto* dyn = callbackVar.getDynamicObject())
+        return dyn->getProperty("__fnId").toString();
+    return {};
+}
+
+static std::unique_ptr<juce::Component> buildComponent(
+    const ElementNode& node,
+    const std::function<void(const juce::String&, const juce::var&)>& onControl)
 {
     if (node.type == "Text")
     {
@@ -90,6 +105,14 @@ static std::unique_ptr<juce::Component> buildComponent(const ElementNode& node)
     if (node.type == "Button")
     {
         auto button = std::make_unique<juce::TextButton>(readTextProp(node, "text"));
+        const auto callbackId = readCallbackId(node);
+        if (callbackId.isNotEmpty() && onControl != nullptr)
+        {
+            button->onClick = [cb = callbackId, onControl]
+            {
+                onControl(cb, juce::var(true));
+            };
+        }
         if (const auto colour = readColourProp(node, "color"))
         {
             button->setColour(juce::TextButton::textColourOffId, *colour);
@@ -105,6 +128,14 @@ static std::unique_ptr<juce::Component> buildComponent(const ElementNode& node)
         auto slider = std::make_unique<juce::Slider>();
         slider->setSliderStyle(juce::Slider::LinearHorizontal);
         slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 80, 24);
+        const auto callbackId = readCallbackId(node);
+        if (callbackId.isNotEmpty() && onControl != nullptr)
+        {
+            slider->onValueChange = [s = slider.get(), cb = callbackId, onControl]
+            {
+                onControl(cb, juce::var(s->getValue()));
+            };
+        }
         return slider;
     }
 
@@ -112,6 +143,14 @@ static std::unique_ptr<juce::Component> buildComponent(const ElementNode& node)
     {
         auto editor = std::make_unique<juce::TextEditor>();
         editor->setText(readTextProp(node, "text"));
+        const auto callbackId = readCallbackId(node);
+        if (callbackId.isNotEmpty() && onControl != nullptr)
+        {
+            editor->onTextChange = [e = editor.get(), cb = callbackId, onControl]
+            {
+                onControl(cb, juce::var(e->getText()));
+            };
+        }
         if (const auto colour = readColourProp(node, "color"))
             editor->setColour(juce::TextEditor::textColourId, *colour);
         if (const auto colour = readColourProp(node, "background"))
@@ -127,7 +166,7 @@ static std::unique_ptr<juce::Component> buildComponent(const ElementNode& node)
     view->borderWidth = static_cast<float>(readNumberProp(node, "borderWidth", 0.0));
     for (const auto& child : node.children)
     {
-        auto builtChild = buildComponent(child);
+        auto builtChild = buildComponent(child, onControl);
         view->children.add(builtChild.get());
         view->addAndMakeVisible(*builtChild);
         builtChild.release();
@@ -137,10 +176,15 @@ static std::unique_ptr<juce::Component> buildComponent(const ElementNode& node)
 }
 }
 
+void JuceRenderer::setControlCallback(std::function<void(const juce::String&, const juce::var&)> callback)
+{
+    onControl = std::move(callback);
+}
+
 void JuceRenderer::renderTo(juce::Component& target, const ElementNode& root)
 {
     target.removeAllChildren();
-    auto rootComponent = buildComponent(root);
+    auto rootComponent = buildComponent(root, onControl);
     target.addAndMakeVisible(*rootComponent);
     rootComponent->setBounds(target.getLocalBounds());
     rootComponent.release();

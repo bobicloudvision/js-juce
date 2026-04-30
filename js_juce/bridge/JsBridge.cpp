@@ -12,6 +12,12 @@ bool JsBridge::attach(juce::Component& rootComponent, const juce::File& entryScr
     root = &rootComponent;
     entryScript = entryScriptFile;
     runtime.setRenderCallback([this](const juce::var& treeVar) { onJsRenderRequest(treeVar); });
+    renderer.setControlCallback([this](const juce::String& callbackId, const juce::var& value)
+    {
+        juce::String err;
+        if (! runtime.invokeControlCallback(callbackId, value, err))
+            lastError = err;
+    });
 
     if (! runtime.initialise())
     {

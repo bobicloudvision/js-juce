@@ -18,6 +18,7 @@ public:
 
     void setRenderCallback(std::function<void(const juce::var&)> callback);
     bool evaluateFile(const juce::File& scriptFile, juce::String& errorMessage);
+    bool invokeControlCallback(const juce::String& callbackId, const juce::var& value, juce::String& errorMessage);
 
 private:
     class Impl;
