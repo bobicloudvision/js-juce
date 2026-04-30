@@ -38,5 +38,33 @@ Set `true` as third argument to enable automatic reload on file save.
 
 ## JSX usage
 
-JSX can be used with your own transform setup by mapping JSX factory to `JuceUI.createElement`.
-This module intentionally keeps the runtime simple and does not include a JSX compiler.
+Default playground entry is `app.js`.
+Optional JSX source (`app.jsx`) is supported when you point to it explicitly (for example via `JS_JUCE_APP_JSX`) or place it where discovery can find it.
+
+Install esbuild:
+
+```bash
+npm i -g esbuild
+```
+
+Then write JSX like:
+
+```jsx
+function App() {
+  return (
+    <>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button text="Click me" />
+      </div>
+    </>
+  );
+}
+
+JuceUI.render(<App />);
+```
+
+`JsBridge` detects `.jsx` entry files and transpiles them on reload using:
+- JSX factory: `JuceUI.createElement`
+- JSX fragment: `JuceUI.Fragment`
+
+If esbuild is not on PATH, set `JS_JUCE_ESBUILD` to its executable path.

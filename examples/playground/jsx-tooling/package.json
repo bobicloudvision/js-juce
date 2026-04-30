@@ -1,0 +1,14 @@
+{
+  "name": "js-juce-playground-jsx-tooling",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local tooling for JSX build commands in js-juce playground",
+  "scripts": {
+    "build:jsx": "esbuild ../app.jsx --loader:.jsx=jsx --jsx-factory=JuceUI.createElement --jsx-fragment=JuceUI.Fragment --format=iife --platform=browser --outfile=../app.compiled.js",
+    "watch:jsx": "esbuild ../app.jsx --loader:.jsx=jsx --jsx-factory=JuceUI.createElement --jsx-fragment=JuceUI.Fragment --format=iife --platform=browser --outfile=../app.compiled.js --watch",
+    "build:app": "bash ../build-mac.sh"
+  },
+  "devDependencies": {
+    "esbuild": "latest"
+  }
+}

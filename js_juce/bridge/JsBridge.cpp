@@ -60,7 +60,7 @@ bool JsBridge::reloadNow(juce::String& errorMessage)
         return false;
     }
 
-    if (! runtime.evaluateFile(entryScript, errorMessage))
+    if (! evaluateEntryScript(errorMessage))
     {
         lastError = errorMessage;
         return false;
@@ -90,5 +90,83 @@ void JsBridge::onLiveReloadTriggered()
 {
     juce::String err;
     reloadNow(err);
+}
+
+bool JsBridge::evaluateEntryScript(juce::String& errorMessage)
+{
+    if (entryScript.hasFileExtension("jsx"))
+    {
+        juce::File transpiled;
+        if (! transpileJsxToTemp(entryScript, transpiled, errorMessage))
+            return false;
+
+        compiledScript = transpiled;
+        return runtime.evaluateFile(compiledScript, errorMessage);
+    }
+
+    compiledScript = juce::File();
+    return runtime.evaluateFile(entryScript, errorMessage);
+}
+
+bool JsBridge::transpileJsxToTemp(const juce::File& jsxFile, juce::File& outJsFile, juce::String& errorMessage) const
+{
+    if (! jsxFile.existsAsFile())
+    {
+        errorMessage = "JSX source file does not exist: " + jsxFile.getFullPathName();
+        return false;
+    }
+
+    auto tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("js_juce");
+    tempDir.createDirectory();
+    outJsFile = tempDir.getChildFile("compiled_playground.js");
+
+    const auto inputPath = jsxFile.getFullPathName();
+    const auto outputPath = outJsFile.getFullPathName();
+    const auto esbuildFromEnv = juce::SystemStats::getEnvironmentVariable("JS_JUCE_ESBUILD", "");
+    juce::String esbuildBin;
+    if (esbuildFromEnv.isNotEmpty())
+    {
+        esbuildBin = esbuildFromEnv;
+    }
+    else
+    {
+        const auto localEsbuild = jsxFile.getParentDirectory()
+                                     .getChildFile("jsx-tooling")
+                                     .getChildFile("node_modules")
+                                     .getChildFile(".bin")
+                                     .getChildFile("esbuild");
+
+        if (localEsbuild.existsAsFile())
+            esbuildBin = localEsbuild.getFullPathName();
+        else
+            esbuildBin = "esbuild";
+    }
+
+    const auto command = esbuildBin
+        + " " + inputPath
+        + " --loader:.jsx=jsx"
+        + " --jsx=transform"
+        + " --jsx-factory=JuceUI.createElement"
+        + " --jsx-fragment=JuceUI.Fragment"
+        + " --format=iife"
+        + " --platform=browser"
+        + " --outfile=" + outputPath;
+
+    juce::ChildProcess process;
+    if (! process.start(command))
+    {
+        errorMessage = "Failed to start JSX compiler. Install esbuild globally, run npm install in examples/playground/jsx-tooling, or set JS_JUCE_ESBUILD env var.";
+        return false;
+    }
+
+    const auto finished = process.waitForProcessToFinish(10000);
+    const auto output = process.readAllProcessOutput();
+    if (! finished || process.getExitCode() != 0 || ! outJsFile.existsAsFile())
+    {
+        errorMessage = "JSX compile failed.\nCommand: " + command + "\nOutput: " + output;
+        return false;
+    }
+
+    return true;
 }
 }

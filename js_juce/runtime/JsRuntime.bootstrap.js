@@ -15,6 +15,164 @@ function __jsJuceFlattenChildren(input, out = []) {
   return out;
 }
 
+function __jsJuceKebabToCamel(name) {
+  return String(name || "").replace(/-([a-z])/g, function(_, c) { return c.toUpperCase(); });
+}
+
+function __jsJuceParseInlineStyle(styleText) {
+  const out = {};
+  const raw = String(styleText || "").trim();
+  if (!raw) return out;
+
+  const parts = raw.split(";");
+  for (const part of parts) {
+    const seg = part.trim();
+    if (!seg) continue;
+    const idx = seg.indexOf(":");
+    if (idx <= 0) continue;
+    const key = __jsJuceKebabToCamel(seg.slice(0, idx).trim());
+    const valueRaw = seg.slice(idx + 1).trim();
+    if (!key) continue;
+    out[key] = __jsJuceCoerceMarkupValue(valueRaw);
+  }
+  return out;
+}
+
+function __jsJuceCoerceMarkupValue(raw) {
+  const value = String(raw == null ? "" : raw).trim();
+  if (value === "") return "";
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (value === "null") return null;
+  if (value === "undefined") return undefined;
+  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+  return value;
+}
+
+function __jsJuceParseMarkupAttributes(attrText) {
+  const props = {};
+  const source = String(attrText || "");
+  const pattern = /([:@a-zA-Z_][\w:.-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>/]+)))?/g;
+  let match;
+  while ((match = pattern.exec(source)) !== null) {
+    const keyRaw = match[1];
+    if (!keyRaw) continue;
+    const key = __jsJuceKebabToCamel(keyRaw);
+    const valueRaw = match[2] ?? match[3] ?? match[4];
+    if (valueRaw == null) {
+      props[key] = true;
+      continue;
+    }
+    if (key === "style") {
+      props.style = __jsJuceParseInlineStyle(valueRaw);
+      continue;
+    }
+    props[key] = __jsJuceCoerceMarkupValue(valueRaw);
+  }
+  return props;
+}
+
+function __jsJuceMapMarkupTag(tagName) {
+  const name = String(tagName || "").toLowerCase();
+  if (name === "fragment") return "fragment";
+  if (name === "node" || name === "view" || name === "div") return "View";
+  if (name === "row") return "Row";
+  if (name === "column" || name === "col") return "Column";
+  if (name === "button" || name === "btn") return "Button";
+  if (name === "text" || name === "label" || name === "span" || name === "p") return "Text";
+  if (name === "input" || name === "textinput") return "TextInput";
+  if (name === "slider" || name === "range") return "Slider";
+  return tagName;
+}
+
+function __jsJuceBuildElementFromMarkupNode(node) {
+  if (node.type === "text")
+    return node.value;
+
+  const mappedTag = __jsJuceMapMarkupTag(node.tag);
+  const children = [];
+  for (const c of node.children || []) {
+    const child = __jsJuceBuildElementFromMarkupNode(c);
+    if (Array.isArray(child)) {
+      for (const nested of child) children.push(nested);
+      continue;
+    }
+    if (typeof child === "string" && child.trim() === "")
+      continue;
+    children.push(child);
+  }
+
+  if (mappedTag === "fragment")
+    return children;
+
+  if (mappedTag === "Button" || mappedTag === "Text") {
+    const textChildren = children.filter(function(c) { return typeof c === "string" || typeof c === "number" || typeof c === "boolean"; });
+    if (node.props.text == null && textChildren.length > 0)
+      node.props.text = textChildren.map(function(c) { return String(c); }).join(" ");
+  }
+
+  return h(mappedTag, node.props || {}, ...children.filter(function(c) { return typeof c !== "string"; }));
+}
+
+function __jsJuceMarkupParse(input) {
+  const markup = String(input || "")
+    .replace(/<>\s*/g, "<fragment>")
+    .replace(/\s*<\/>/g, "</fragment>");
+  const root = { type: "tag", tag: "__root__", props: {}, children: [] };
+  const stack = [root];
+  const tokenPattern = /<!--[\s\S]*?-->|<\/?[a-zA-Z_][\w:.-]*(?:\s+[^<>]*?)?\s*\/?>|[^<]+/g;
+  let token;
+  while ((token = tokenPattern.exec(markup)) !== null) {
+    const raw = token[0];
+    if (!raw) continue;
+    if (raw.startsWith("<!--")) continue;
+
+    if (raw[0] !== "<") {
+      stack[stack.length - 1].children.push({ type: "text", value: raw });
+      continue;
+    }
+
+    if (raw[1] === "/") {
+      const closeTag = raw.slice(2, -1).trim().toLowerCase();
+      const top = stack[stack.length - 1];
+      if (!top || top.tag.toLowerCase() !== closeTag)
+        throw new Error("Markup parse error: closing tag mismatch for </" + closeTag + ">");
+      stack.pop();
+      continue;
+    }
+
+    const selfClosing = /\/>$/.test(raw);
+    const openBody = raw.slice(1, selfClosing ? -2 : -1).trim();
+    const firstSpace = openBody.search(/\s/);
+    const tag = firstSpace < 0 ? openBody : openBody.slice(0, firstSpace);
+    const attrText = firstSpace < 0 ? "" : openBody.slice(firstSpace + 1);
+    const node = {
+      type: "tag",
+      tag,
+      props: __jsJuceParseMarkupAttributes(attrText),
+      children: []
+    };
+    stack[stack.length - 1].children.push(node);
+    if (!selfClosing)
+      stack.push(node);
+  }
+
+  if (stack.length !== 1)
+    throw new Error("Markup parse error: unclosed tags");
+
+  const meaningful = root.children.filter(function(c) {
+    if (c.type !== "text") return true;
+    return String(c.value || "").trim() !== "";
+  });
+
+  if (meaningful.length === 0)
+    return h("View", {});
+  if (meaningful.length === 1)
+    return __jsJuceBuildElementFromMarkupNode(meaningful[0]);
+
+  return h("View", {}, ...meaningful.map(__jsJuceBuildElementFromMarkupNode));
+}
+
 function __jsJuceNormalizeStyleProps(props) {
   const source = props || {};
   const style = source.style || {};
@@ -119,6 +277,14 @@ function __jsJuceWrapFunctionsForTransport(input) {
 function __jsJuceNormalizeNode(node) {
   if (node == null) {
     return __jsJuceCreateElement("View", {});
+  }
+
+  if (Array.isArray(node)) {
+    return __jsJuceCreateElement(
+      "View",
+      {},
+      ...__jsJuceFlattenChildren(node).map(__jsJuceNormalizeNode)
+    );
   }
 
   if (node && typeof node.toElement === "function") {
@@ -242,8 +408,14 @@ class TextInput extends View {
 }
 
 function __jsJuceMapIntrinsicTag(type) {
-  if (type === "div") return "View";
-  if (type === "span" || type === "p") return "Text";
+  const tag = String(type || "").toLowerCase();
+  if (tag === "div" || tag === "view" || tag === "node") return "View";
+  if (tag === "span" || tag === "p" || tag === "text" || tag === "label") return "Text";
+  if (tag === "row") return "Row";
+  if (tag === "column" || tag === "col") return "Column";
+  if (tag === "button" || tag === "btn") return "Button";
+  if (tag === "input" || tag === "textinput") return "TextInput";
+  if (tag === "slider" || tag === "range") return "Slider";
   return type;
 }
 
@@ -252,10 +424,21 @@ function h(type, props, ...children) {
     return type({ ...(props || {}), children });
   }
   const mapped = __jsJuceMapIntrinsicTag(type);
+  const flatChildren = __jsJuceFlattenChildren(children);
+  const nextProps = { ...(props || {}) };
+
+  if ((mapped === "Text" || mapped === "Button") && nextProps.text == null) {
+    const textChildren = flatChildren.filter(function(c) {
+      return typeof c === "string" || typeof c === "number" || typeof c === "boolean";
+    });
+    if (textChildren.length > 0)
+      nextProps.text = textChildren.map(function(c) { return String(c); }).join(" ");
+  }
+
   return __jsJuceCreateElement(
     mapped,
-    __jsJuceWrapFunctionsForTransport(__jsJuceMergeStyle(mapped, props || {})),
-    ...__jsJuceFlattenChildren(children).map(__jsJuceNormalizeNode)
+    __jsJuceWrapFunctionsForTransport(__jsJuceMergeStyle(mapped, nextProps)),
+    ...flatChildren.map(__jsJuceNormalizeNode)
   );
 }
 
@@ -295,7 +478,14 @@ globalThis.JuceUI = {
   createElement: function(type, props, ...children) {
     return h(type, props, ...children);
   },
+  Fragment: function(props) {
+    const p = props || {};
+    return __jsJuceFlattenChildren(p.children || []);
+  },
   h,
+  markup: function(input) {
+    return __jsJuceMarkupParse(input);
+  },
   withStyleContext: function(contextObject, buildFn) {
     const parent = __jsJuceCurrentStyleContext();
     const merged = Object.create(parent || null);

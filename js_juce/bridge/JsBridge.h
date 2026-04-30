@@ -22,11 +22,14 @@ public:
     juce::String getLastError() const;
 
 private:
+    bool evaluateEntryScript(juce::String& errorMessage);
+    bool transpileJsxToTemp(const juce::File& jsxFile, juce::File& outJsFile, juce::String& errorMessage) const;
     void onJsRenderRequest(const juce::var& treeVar);
     void onLiveReloadTriggered();
 
     juce::Component* root = nullptr;
     juce::File entryScript;
+    juce::File compiledScript;
     JsRuntime runtime;
     JuceRenderer renderer;
     LiveReloader reloader;

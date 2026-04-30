@@ -22,7 +22,7 @@ juce::File findPlaygroundScript()
     const auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
     const auto appDir = appFile.getParentDirectory();
 
-    if (const auto* envPath = std::getenv("JS_JUCE_APP_JS"))
+    if (const auto* envPath = std::getenv("JS_JUCE_APP_JSX"))
     {
         const juce::File envFile(juce::String::fromUTF8(envPath));
         if (envFile.existsAsFile())
@@ -30,30 +30,30 @@ juce::File findPlaygroundScript()
     }
 
     const juce::Array<juce::File> candidates {
-        cwd.getChildFile("app.js"),
-        cwd.getChildFile("examples/playground/app.js"),
-        cwd.getParentDirectory().getChildFile("app.js"),
-        cwd.getParentDirectory().getChildFile("examples/playground/app.js"),
-        appDir.getChildFile("app.js"),
-        appDir.getParentDirectory().getChildFile("app.js"),
-        appDir.getParentDirectory().getParentDirectory().getChildFile("examples/playground/app.js")
+        cwd.getChildFile("app.jsx"),
+        cwd.getChildFile("examples/playground/app.jsx"),
+        cwd.getParentDirectory().getChildFile("app.jsx"),
+        cwd.getParentDirectory().getChildFile("examples/playground/app.jsx"),
+        appDir.getChildFile("app.jsx"),
+        appDir.getParentDirectory().getChildFile("app.jsx"),
+        appDir.getParentDirectory().getParentDirectory().getChildFile("examples/playground/app.jsx")
     };
 
     for (const auto& file : candidates)
         if (file.existsAsFile())
             return file;
 
-    const auto fromCwd = findByWalkingUp(cwd, "examples/playground/app.js", 16);
-    if (fromCwd.existsAsFile())
-        return fromCwd;
+    const auto fromCwdJsx = findByWalkingUp(cwd, "examples/playground/app.jsx", 16);
+    if (fromCwdJsx.existsAsFile())
+        return fromCwdJsx;
 
-    const auto fromAppDir = findByWalkingUp(appDir, "examples/playground/app.js", 16);
-    if (fromAppDir.existsAsFile())
-        return fromAppDir;
+    const auto fromAppDirJsx = findByWalkingUp(appDir, "examples/playground/app.jsx", 16);
+    if (fromAppDirJsx.existsAsFile())
+        return fromAppDirJsx;
 
-    const auto localFromCwd = findByWalkingUp(cwd, "app.js", 16);
-    if (localFromCwd.existsAsFile())
-        return localFromCwd;
+    const auto localFromCwdJsx = findByWalkingUp(cwd, "app.jsx", 16);
+    if (localFromCwdJsx.existsAsFile())
+        return localFromCwdJsx;
 
     return {};
 }
@@ -67,7 +67,7 @@ MainComponent::MainComponent()
     const auto jsFile = findPlaygroundScript();
     if (! jsFile.existsAsFile())
     {
-        statusMessage = "app.js not found. Set JS_JUCE_APP_JS env var or place examples/playground/app.js in reachable parent path.";
+        statusMessage = "app.jsx not found. Set JS_JUCE_APP_JSX env var, or place examples/playground/app.jsx in reachable parent path.";
         return;
     }
 
