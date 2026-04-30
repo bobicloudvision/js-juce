@@ -25,6 +25,16 @@ juce_add_gui_app(js_juce_host
     PRODUCT_NAME "js_juce_host"
 )
 
+add_library(js_juce_quickjs STATIC
+    ext/quickjs/quickjs.c
+    ext/quickjs/cutils.c
+    ext/quickjs/dtoa.c
+    ext/quickjs/libregexp.c
+    ext/quickjs/libunicode.c
+)
+target_include_directories(js_juce_quickjs PRIVATE ext/quickjs)
+target_compile_definitions(js_juce_quickjs PRIVATE _GNU_SOURCE CONFIG_VERSION=\"2025-09-13\")
+
 target_sources(js_juce_host
     PRIVATE
         src/Main.cpp
@@ -33,6 +43,7 @@ target_sources(js_juce_host
 target_link_libraries(js_juce_host
     PRIVATE
         js_juce
+        js_juce_quickjs
         juce::juce_gui_basics
         juce::juce_gui_extra
         juce::juce_recommended_config_flags

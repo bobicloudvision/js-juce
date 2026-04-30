@@ -15,7 +15,7 @@ bool JsBridge::attach(juce::Component& rootComponent, const juce::File& entryScr
 
     if (! runtime.initialise())
     {
-        lastError = "Failed to initialize QuickJS runtime.";
+        lastError = "Failed to initialize QuickJS runtime. Ensure quickjs.h is available in project include paths.";
         return false;
     }
 

@@ -3,6 +3,12 @@
 #if __has_include(<quickjs.h>)
  #include <quickjs.h>
  #define JS_JUCE_HAS_QUICKJS 1
+#elif __has_include("quickjs.h")
+ #include "quickjs.h"
+ #define JS_JUCE_HAS_QUICKJS 1
+#elif __has_include("../../ext/quickjs/quickjs.h")
+ #include "../../ext/quickjs/quickjs.h"
+ #define JS_JUCE_HAS_QUICKJS 1
 #else
  #define JS_JUCE_HAS_QUICKJS 0
 #endif
