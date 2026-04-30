@@ -124,6 +124,9 @@ function __jsJuceNormalizeStyleProps(props) {
   const merged = { ...source };
 
   if (style.backgroundColor !== undefined) merged.background = style.backgroundColor;
+  if (style.gradientFrom !== undefined) merged.gradientFrom = style.gradientFrom;
+  if (style.gradientTo !== undefined) merged.gradientTo = style.gradientTo;
+  if (style.gradientVertical !== undefined) merged.gradientVertical = style.gradientVertical ? 1 : 0;
   if (style.borderColor !== undefined) merged.borderColor = style.borderColor;
   if (style.borderWidth !== undefined) merged.borderWidth = style.borderWidth;
   if (style.color !== undefined) merged.color = style.color;
@@ -190,6 +193,12 @@ class View {
   setStyle(nextStyle = {}) { return this.css(nextStyle); }
   background(value) { return this.style({ background: value }); }
   setBackground(value) { return this.background(value); }
+  gradient(from, to, vertical = true) {
+    return this.style({ gradientFrom: from, gradientTo: to, gradientVertical: vertical ? 1 : 0 });
+  }
+  setGradient(from, to, vertical = true) { return this.gradient(from, to, vertical); }
+  setPluginBackground(value) { return this.setBackground(value); }
+  setPluginGradient(from, to, vertical = true) { return this.setGradient(from, to, vertical); }
   border(color, width = 1) { return this.style({ borderColor: color, borderWidth: width }); }
   setBorder(color, width = 1) { return this.border(color, width); }
   color(value) { return this.style({ color: value }); }

@@ -12,8 +12,22 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        if (backgroundColour.has_value())
+        if (gradientFrom.has_value() && gradientTo.has_value())
+        {
+            juce::ColourGradient gradient(*gradientFrom,
+                                          0.0f,
+                                          0.0f,
+                                          *gradientTo,
+                                          gradientVertical ? 0.0f : static_cast<float>(getWidth()),
+                                          gradientVertical ? static_cast<float>(getHeight()) : 0.0f,
+                                          false);
+            g.setGradientFill(gradient);
+            g.fillAll();
+        }
+        else if (backgroundColour.has_value())
+        {
             g.fillAll(*backgroundColour);
+        }
 
         if (borderWidth > 0.0f && borderColour.has_value())
         {
@@ -37,6 +51,9 @@ public:
     juce::Array<juce::Component*> children;
     bool row = false;
     std::optional<juce::Colour> backgroundColour;
+    std::optional<juce::Colour> gradientFrom;
+    std::optional<juce::Colour> gradientTo;
+    bool gradientVertical = true;
     std::optional<juce::Colour> borderColour;
     float borderWidth = 0.0f;
 };
@@ -162,6 +179,9 @@ static std::unique_ptr<juce::Component> buildComponent(
 
     auto view = std::make_unique<ViewComponent>(node.type == "Row");
     view->backgroundColour = readColourProp(node, "background");
+    view->gradientFrom = readColourProp(node, "gradientFrom");
+    view->gradientTo = readColourProp(node, "gradientTo");
+    view->gradientVertical = readNumberProp(node, "gradientVertical", 1.0) != 0.0;
     view->borderColour = readColourProp(node, "borderColor");
     view->borderWidth = static_cast<float>(readNumberProp(node, "borderWidth", 0.0));
     for (const auto& child : node.children)
