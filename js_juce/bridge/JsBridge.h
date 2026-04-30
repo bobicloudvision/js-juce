@@ -15,6 +15,7 @@ public:
     ~JsBridge();
 
     bool attach(juce::Component& rootComponent, const juce::File& entryScriptFile, bool enableLiveReload);
+    void setHostData(const juce::var& data);
     void detach();
 
     bool reloadNow(juce::String& errorMessage);
@@ -30,5 +31,6 @@ private:
     JuceRenderer renderer;
     LiveReloader reloader;
     juce::String lastError;
+    juce::var initialHostData;
 };
 }

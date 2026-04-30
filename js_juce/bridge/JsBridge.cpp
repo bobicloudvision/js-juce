@@ -24,6 +24,7 @@ bool JsBridge::attach(juce::Component& rootComponent, const juce::File& entryScr
         lastError = "Failed to initialize QuickJS runtime. Ensure quickjs.h is available in project include paths.";
         return false;
     }
+    runtime.setHostData(initialHostData);
 
     juce::String err;
     if (! reloadNow(err))
@@ -33,6 +34,12 @@ bool JsBridge::attach(juce::Component& rootComponent, const juce::File& entryScr
         reloader.start(entryScript, [this]() { onLiveReloadTriggered(); });
 
     return true;
+}
+
+void JsBridge::setHostData(const juce::var& data)
+{
+    initialHostData = data;
+    runtime.setHostData(data);
 }
 
 void JsBridge::detach()

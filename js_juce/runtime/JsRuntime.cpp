@@ -19,6 +19,7 @@ class JsRuntime::Impl
 {
 public:
     std::function<void(const juce::var&)> onRender;
+    juce::var hostData;
 
 #if JS_JUCE_HAS_QUICKJS
     JSRuntime* runtime = nullptr;
@@ -145,6 +146,11 @@ void JsRuntime::setRenderCallback(std::function<void(const juce::var&)> callback
     impl->onRender = std::move(callback);
 }
 
+void JsRuntime::setHostData(const juce::var& data)
+{
+    impl->hostData = data;
+}
+
 bool JsRuntime::evaluateFile(const juce::File& scriptFile, juce::String& errorMessage)
 {
     if (! scriptFile.existsAsFile())
@@ -161,9 +167,20 @@ bool JsRuntime::evaluateFile(const juce::File& scriptFile, juce::String& errorMe
     }
 
     const auto code = scriptFile.loadFileAsString();
+    const auto hostDataJson = juce::JSON::toString(impl->hostData);
+    const auto hostDataJsonQuoted = juce::JSON::toString(hostDataJson);
+    const auto hostDataPrefix =
+        "globalThis.__jsJuceBackend = (function(){\n"
+        "  try {\n"
+        "    const parsed = JSON.parse(" + hostDataJsonQuoted + ");\n"
+        "    return (parsed && typeof parsed === 'object') ? parsed : {};\n"
+        "  } catch (_) {\n"
+        "    return {};\n"
+        "  }\n"
+        "})();\n";
     // Evaluate user script in function scope so live-reload does not
     // redeclare top-level const/let bindings in the global context.
-    const auto wrappedCode = "(function(){\n" + code + "\n})();";
+    const auto wrappedCode = hostDataPrefix + "(function(){\n" + code + "\n})();";
     const auto path = scriptFile.getFullPathName().toRawUTF8();
     auto result = JS_Eval(impl->context,
                           wrappedCode.toRawUTF8(),
