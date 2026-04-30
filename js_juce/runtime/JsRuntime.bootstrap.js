@@ -23,13 +23,34 @@ function __jsJuceNormalizeStyleProps(props) {
   const source = props || {};
   const style = source.style || {};
   const merged = { ...source };
+  for (const key of Object.keys(style)) merged[key] = style[key];
 
   if (style.backgroundColor !== undefined) merged.background = style.backgroundColor;
+  if (style.border !== undefined) merged.borderColor = style.border;
+  if (style.borderSize !== undefined) merged.borderWidth = style.borderSize;
+  if (style.flexDirection !== undefined) merged.direction = style.flexDirection;
+  if (style.justifyContent !== undefined) merged.justify = style.justifyContent;
+  if (style.alignItems !== undefined) merged.alignItems = style.alignItems;
+  if (style.alignContent !== undefined) merged.alignContent = style.alignContent;
+  if (style.alignSelf !== undefined) merged.alignSelf = style.alignSelf;
+  if (style.flexWrap !== undefined) merged.wrap = style.flexWrap;
+  if (style.flexGrow !== undefined) merged.grow = style.flexGrow;
+  if (style.flexShrink !== undefined) merged.shrink = style.flexShrink;
+  if (style.flexBasis !== undefined) merged.basis = style.flexBasis;
+  if (style.gap !== undefined) merged.gap = style.gap;
+  if (style.rowGap !== undefined) merged.rowGap = style.rowGap;
+  if (style.columnGap !== undefined) merged.columnGap = style.columnGap;
+  if (style.margin !== undefined) merged.margin = style.margin;
+  if (style.marginTop !== undefined) merged.marginTop = style.marginTop;
+  if (style.marginRight !== undefined) merged.marginRight = style.marginRight;
+  if (style.marginBottom !== undefined) merged.marginBottom = style.marginBottom;
+  if (style.marginLeft !== undefined) merged.marginLeft = style.marginLeft;
   if (style.gradientFrom !== undefined) merged.gradientFrom = style.gradientFrom;
   if (style.gradientTo !== undefined) merged.gradientTo = style.gradientTo;
   if (style.gradientVertical !== undefined) merged.gradientVertical = style.gradientVertical ? 1 : 0;
   if (style.borderColor !== undefined) merged.borderColor = style.borderColor;
   if (style.borderWidth !== undefined) merged.borderWidth = style.borderWidth;
+  if (style.padding !== undefined) merged.padding = style.padding;
   if (style.color !== undefined) merged.color = style.color;
   if (style.background !== undefined) merged.background = style.background;
 
@@ -102,6 +123,26 @@ class View {
   setPluginGradient(from, to, vertical = true) { return this.setGradient(from, to, vertical); }
   border(color, width = 1) { return this.style({ borderColor: color, borderWidth: width }); }
   setBorder(color, width = 1) { return this.border(color, width); }
+  padding(value) { return this.style({ padding: value }); }
+  setPadding(value) { return this.padding(value); }
+  margin(value) { return this.style({ margin: value }); }
+  setMargin(value) { return this.margin(value); }
+  setSize(width, height) { return this.style({ width, height }); }
+  setMinSize(minWidth, minHeight) { return this.style({ minWidth, minHeight }); }
+  setMaxSize(maxWidth, maxHeight) { return this.style({ maxWidth, maxHeight }); }
+  setFlex(grow = 1, shrink = 1, basis = 0) { return this.style({ grow, shrink, basis }); }
+  setFlexGrow(grow) { return this.style({ grow }); }
+  setFlexShrink(shrink) { return this.style({ shrink }); }
+  setFlexBasis(basis) { return this.style({ basis }); }
+  setAlignSelf(value) { return this.style({ alignSelf: value }); }
+  setDirection(value) { return this.style({ direction: value }); }
+  setWrap(value) { return this.style({ wrap: value }); }
+  setJustify(value) { return this.style({ justify: value }); }
+  setAlignItems(value) { return this.style({ alignItems: value }); }
+  setAlignContent(value) { return this.style({ alignContent: value }); }
+  setGap(value) { return this.style({ gap: value }); }
+  setRowGap(value) { return this.style({ rowGap: value }); }
+  setColumnGap(value) { return this.style({ columnGap: value }); }
   color(value) { return this.style({ color: value }); }
   setColor(value) { return this.color(value); }
   setPosition(x, y) { return this.style({ x, y }); }

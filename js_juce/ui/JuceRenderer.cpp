@@ -5,6 +5,153 @@ namespace js_juce
 {
 namespace
 {
+struct ChildLayoutStyle
+{
+    float width = -1.0f;
+    float minWidth = 0.0f;
+    float maxWidth = -1.0f;
+    float height = -1.0f;
+    float minHeight = 0.0f;
+    float maxHeight = -1.0f;
+    float flexGrow = 1.0f;
+    float flexShrink = 1.0f;
+    float flexBasis = -2.0f;
+    int order = 0;
+    juce::FlexItem::AlignSelf alignSelf = juce::FlexItem::AlignSelf::autoAlign;
+    juce::FlexItem::Margin margin;
+};
+
+static std::optional<juce::String> readOptionalTextProp(const ElementNode& node, const juce::String& name)
+{
+    const auto* value = node.props.getVarPointer(name);
+    if (value == nullptr)
+        return std::nullopt;
+
+    const auto text = value->toString().trim();
+    if (text.isEmpty())
+        return std::nullopt;
+    return text;
+}
+
+static std::optional<float> readOptionalNumberProp(const ElementNode& node, const juce::String& name)
+{
+    const auto* value = node.props.getVarPointer(name);
+    if (value == nullptr)
+        return std::nullopt;
+    return static_cast<float>(static_cast<double>(*value));
+}
+
+static juce::FlexBox::Direction parseDirection(const juce::String& value, bool defaultRow)
+{
+    if (value == "row")
+        return juce::FlexBox::Direction::row;
+    if (value == "column")
+        return juce::FlexBox::Direction::column;
+    if (value == "row-reverse")
+        return juce::FlexBox::Direction::rowReverse;
+    if (value == "column-reverse")
+        return juce::FlexBox::Direction::columnReverse;
+    return defaultRow ? juce::FlexBox::Direction::row : juce::FlexBox::Direction::column;
+}
+
+static juce::FlexBox::Wrap parseWrap(const juce::String& value)
+{
+    if (value == "wrap")
+        return juce::FlexBox::Wrap::wrap;
+    if (value == "wrap-reverse")
+        return juce::FlexBox::Wrap::wrapReverse;
+    return juce::FlexBox::Wrap::noWrap;
+}
+
+static juce::FlexBox::JustifyContent parseJustify(const juce::String& value)
+{
+    if (value == "start" || value == "flex-start" || value == "left")
+        return juce::FlexBox::JustifyContent::flexStart;
+    if (value == "end" || value == "flex-end" || value == "right")
+        return juce::FlexBox::JustifyContent::flexEnd;
+    if (value == "center")
+        return juce::FlexBox::JustifyContent::center;
+    if (value == "space-between")
+        return juce::FlexBox::JustifyContent::spaceBetween;
+    if (value == "space-around")
+        return juce::FlexBox::JustifyContent::spaceAround;
+    return juce::FlexBox::JustifyContent::flexStart;
+}
+
+static juce::FlexBox::AlignItems parseAlignItems(const juce::String& value)
+{
+    if (value == "stretch")
+        return juce::FlexBox::AlignItems::stretch;
+    if (value == "start" || value == "flex-start")
+        return juce::FlexBox::AlignItems::flexStart;
+    if (value == "end" || value == "flex-end")
+        return juce::FlexBox::AlignItems::flexEnd;
+    if (value == "center")
+        return juce::FlexBox::AlignItems::center;
+    return juce::FlexBox::AlignItems::stretch;
+}
+
+static juce::FlexBox::AlignContent parseAlignContent(const juce::String& value)
+{
+    if (value == "start" || value == "flex-start")
+        return juce::FlexBox::AlignContent::flexStart;
+    if (value == "end" || value == "flex-end")
+        return juce::FlexBox::AlignContent::flexEnd;
+    if (value == "center")
+        return juce::FlexBox::AlignContent::center;
+    if (value == "space-between")
+        return juce::FlexBox::AlignContent::spaceBetween;
+    if (value == "space-around")
+        return juce::FlexBox::AlignContent::spaceAround;
+    if (value == "stretch")
+        return juce::FlexBox::AlignContent::stretch;
+    return juce::FlexBox::AlignContent::stretch;
+}
+
+static juce::FlexItem::AlignSelf parseAlignSelf(const juce::String& value)
+{
+    if (value == "start" || value == "flex-start")
+        return juce::FlexItem::AlignSelf::flexStart;
+    if (value == "end" || value == "flex-end")
+        return juce::FlexItem::AlignSelf::flexEnd;
+    if (value == "center")
+        return juce::FlexItem::AlignSelf::center;
+    if (value == "stretch")
+        return juce::FlexItem::AlignSelf::stretch;
+    return juce::FlexItem::AlignSelf::autoAlign;
+}
+
+static float readEdgeValue(const ElementNode& node, const juce::String& allName, const juce::String& edgeName, float fallbackValue)
+{
+    const auto allValue = readOptionalNumberProp(node, allName);
+    const auto edgeValue = readOptionalNumberProp(node, edgeName);
+    return edgeValue.value_or(allValue.value_or(fallbackValue));
+}
+
+static ChildLayoutStyle readChildLayoutStyle(const ElementNode& node)
+{
+    ChildLayoutStyle style;
+
+    style.width = readOptionalNumberProp(node, "width").value_or(-1.0f);
+    style.minWidth = readOptionalNumberProp(node, "minWidth").value_or(0.0f);
+    style.maxWidth = readOptionalNumberProp(node, "maxWidth").value_or(-1.0f);
+    style.height = readOptionalNumberProp(node, "height").value_or(-1.0f);
+    style.minHeight = readOptionalNumberProp(node, "minHeight").value_or(0.0f);
+    style.maxHeight = readOptionalNumberProp(node, "maxHeight").value_or(-1.0f);
+    style.flexGrow = readOptionalNumberProp(node, "grow").value_or(1.0f);
+    style.flexShrink = readOptionalNumberProp(node, "shrink").value_or(1.0f);
+    style.flexBasis = readOptionalNumberProp(node, "basis").value_or(-2.0f);
+    style.order = static_cast<int>(readOptionalNumberProp(node, "order").value_or(0.0f));
+    style.alignSelf = parseAlignSelf(readOptionalTextProp(node, "alignSelf").value_or(juce::String()));
+
+    style.margin.left = readEdgeValue(node, "margin", "marginLeft", 0.0f);
+    style.margin.right = readEdgeValue(node, "margin", "marginRight", 0.0f);
+    style.margin.top = readEdgeValue(node, "margin", "marginTop", 0.0f);
+    style.margin.bottom = readEdgeValue(node, "margin", "marginBottom", 0.0f);
+
+    return style;
+}
+
 class ViewComponent final : public juce::Component
 {
 public:
@@ -39,16 +186,50 @@ public:
     void resized() override
     {
         juce::FlexBox fb;
-        fb.flexDirection = row ? juce::FlexBox::Direction::row : juce::FlexBox::Direction::column;
-        fb.flexWrap = juce::FlexBox::Wrap::noWrap;
+        fb.flexDirection = parseDirection(direction, row);
+        fb.flexWrap = parseWrap(wrap);
+        fb.justifyContent = parseJustify(justify);
+        fb.alignItems = parseAlignItems(alignItems);
+        fb.alignContent = parseAlignContent(alignContent);
 
-        for (auto* c : children)
-            fb.items.add(juce::FlexItem(*c).withFlex(1.0f));
+        for (int index = 0; index < children.size(); ++index)
+        {
+            auto* c = children[index];
+            const auto& s = childStyles.getReference(index);
+            auto item = juce::FlexItem(*c);
+            item.width = s.width;
+            item.minWidth = s.minWidth;
+            item.maxWidth = s.maxWidth;
+            item.height = s.height;
+            item.minHeight = s.minHeight;
+            item.maxHeight = s.maxHeight;
+            item.flexGrow = s.flexGrow;
+            item.flexShrink = s.flexShrink;
+            item.flexBasis = s.flexBasis;
+            item.order = s.order;
+            item.alignSelf = s.alignSelf;
+            item.margin = s.margin;
 
-        fb.performLayout(getLocalBounds().toFloat());
+            if (gap > 0.0f || rowGap > 0.0f || columnGap > 0.0f)
+            {
+                const auto effectiveColumnGap = columnGap > 0.0f ? columnGap : gap;
+                const auto effectiveRowGap = rowGap > 0.0f ? rowGap : gap;
+                const auto isLastItem = index == children.size() - 1;
+                if (!isLastItem)
+                {
+                    item.margin.right += effectiveColumnGap;
+                    item.margin.bottom += effectiveRowGap;
+                }
+            }
+
+            fb.items.add(item);
+        }
+
+        fb.performLayout(getLocalBounds().reduced(static_cast<int>(padding)).toFloat());
     }
 
     juce::Array<juce::Component*> children;
+    juce::Array<ChildLayoutStyle> childStyles;
     bool row = false;
     std::optional<juce::Colour> backgroundColour;
     std::optional<juce::Colour> gradientFrom;
@@ -56,6 +237,15 @@ public:
     bool gradientVertical = true;
     std::optional<juce::Colour> borderColour;
     float borderWidth = 0.0f;
+    float padding = 0.0f;
+    float gap = 0.0f;
+    float rowGap = 0.0f;
+    float columnGap = 0.0f;
+    juce::String direction;
+    juce::String wrap = "nowrap";
+    juce::String justify = "flex-start";
+    juce::String alignItems = "stretch";
+    juce::String alignContent = "stretch";
 };
 
 static juce::var readVarProp(const ElementNode& node, const juce::String& name)
@@ -184,10 +374,20 @@ static std::unique_ptr<juce::Component> buildComponent(
     view->gradientVertical = readNumberProp(node, "gradientVertical", 1.0) != 0.0;
     view->borderColour = readColourProp(node, "borderColor");
     view->borderWidth = static_cast<float>(readNumberProp(node, "borderWidth", 0.0));
+    view->padding = static_cast<float>(readNumberProp(node, "padding", 0.0));
+    view->gap = static_cast<float>(readNumberProp(node, "gap", 0.0));
+    view->rowGap = static_cast<float>(readNumberProp(node, "rowGap", 0.0));
+    view->columnGap = static_cast<float>(readNumberProp(node, "columnGap", 0.0));
+    view->direction = readTextProp(node, "direction");
+    view->wrap = readTextProp(node, "wrap");
+    view->justify = readTextProp(node, "justify");
+    view->alignItems = readTextProp(node, "alignItems");
+    view->alignContent = readTextProp(node, "alignContent");
     for (const auto& child : node.children)
     {
         auto builtChild = buildComponent(child, onControl);
         view->children.add(builtChild.get());
+        view->childStyles.add(readChildLayoutStyle(child));
         view->addAndMakeVisible(*builtChild);
         builtChild.release();
     }
