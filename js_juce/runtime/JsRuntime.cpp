@@ -161,8 +161,15 @@ bool JsRuntime::evaluateFile(const juce::File& scriptFile, juce::String& errorMe
     }
 
     const auto code = scriptFile.loadFileAsString();
+    // Evaluate user script in function scope so live-reload does not
+    // redeclare top-level const/let bindings in the global context.
+    const auto wrappedCode = "(function(){\n" + code + "\n})();";
     const auto path = scriptFile.getFullPathName().toRawUTF8();
-    auto result = JS_Eval(impl->context, code.toRawUTF8(), static_cast<size_t>(code.getNumBytesAsUTF8()), path, JS_EVAL_TYPE_GLOBAL);
+    auto result = JS_Eval(impl->context,
+                          wrappedCode.toRawUTF8(),
+                          static_cast<size_t>(wrappedCode.getNumBytesAsUTF8()),
+                          path,
+                          JS_EVAL_TYPE_GLOBAL);
 
     if (JS_IsException(result))
     {
